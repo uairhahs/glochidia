@@ -1,0 +1,13 @@
+#!/bin/bash
+# Wrapper script that uses podman to run x86_64-linux-musl-gcc
+# This allows the build system to call x86_64-linux-musl-gcc
+# and have it transparently use the podman container with musl for static compilation
+
+CONTAINER_IMAGE="ghcr.io/cross-rs/x86_64-unknown-linux-musl:latest"
+
+# Run the compiler inside the container
+podman run --rm \
+    -v "$PWD:/project:z" \
+    -w /project \
+    "$CONTAINER_IMAGE" \
+    x86_64-linux-musl-gcc "$@"

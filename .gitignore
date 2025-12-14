@@ -1,0 +1,27 @@
+# Build artifacts and compiled binaries
+artifacts/
+*.o
+*.a
+*.so
+/glochidia_app
+/glochidia_app.*
+
+# Source packages and archives
+*.tar.gz
+*.tar.bz2
+*.zip
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build output
+target/
+build/
