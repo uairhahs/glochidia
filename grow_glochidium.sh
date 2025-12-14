@@ -16,6 +16,20 @@ if [ -z "$DEPLOY_USER" ]; then
     [ -z "$DEPLOY_USER" ] && { echo "Error: DEPLOY_USER is required"; exit 1; }
 fi
 
+# Verify SSH key setup before proceeding
+verify_ssh_setup() {
+    local user="$1"
+    local host="$2"
+    if ! ssh -o BatchMode=yes -o ConnectTimeout=5 "$user@$host" "echo OK" &>/dev/null; then
+        echo "Error: Cannot connect to $user@$host using SSH keys"
+        echo "Please set up SSH key authentication:"
+        echo "  1. Generate keys: ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N \"\""
+        echo "  2. Copy to device: ssh-copy-id -i ~/.ssh/id_rsa.pub $user@$host"
+        return 1
+    fi
+    return 0
+}
+
 if [ -z "$DEPLOY_HOST" ]; then
     read -p "Enter DEPLOY_HOST: " DEPLOY_HOST
     [ -z "$DEPLOY_HOST" ] && { echo "Error: DEPLOY_HOST is required"; exit 1; }
@@ -26,7 +40,13 @@ if [ -z "$DEPLOY_PATH" ]; then
     [ -z "$DEPLOY_PATH" ] && { echo "Error: DEPLOY_PATH is required"; exit 1; }
 fi
 
-BUILD_DIR="/tmp/glochidia_build_$$"
+# Verify SSH connectivity before proceeding
+echo "Verifying SSH connectivity..."
+if ! verify_ssh_setup "$DEPLOY_USER" "$DEPLOY_HOST"; then
+    exit 1
+fi
+echo "SSH connectivity verified"
+echo
 WRAPPER_SCRIPT="x86_64-linux-musl-gcc"
 
 # ============ PIPELINE ============
