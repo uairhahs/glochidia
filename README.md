@@ -18,6 +18,23 @@ This repository provides a streamlined pipeline to:
 - **bash** - For pipeline execution
 - **rsync** - For binary deployment via SSH
 - **ssh** - For remote device access
+- **ssh-copy-id** - For setting up SSH key authentication
+
+### SSH Setup (Required)
+
+Before using the deployment pipeline, set up SSH key authentication:
+
+```bash
+ssh-copy-id -i ~/.ssh/id_rsa.pub username@device.ip.or.hostname
+```
+
+If you don't have SSH keys, generate them first:
+
+```bash
+ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N ""
+```
+
+Then copy the public key to your target device.
 
 ### Recommended
 - **cmake** - For CMake-based projects
@@ -188,14 +205,14 @@ grow_glochidium.sh <repo_url> <binary_name> "make -f custom.mk"
 
 ```
 glochidia/
-├── Makefile                         # Build configuration
-├── x86_64-linux-musl-gcc            # Cross-compiler wrapper script
-├── grow_glochidium.sh               # Universal build & deploy script
-├── glochidia_app.c                  # Example C source
-├── .gitignore                       # Git ignore rules
+├── Makefile                    # Build configuration
+├── x86_64-linux-musl-gcc       # Cross-compiler wrapper script
+├── grow_glochidium.sh          # Universal build & deploy script
+├── glochidia_app.c             # Example C source
+├── .gitignore                  # Git ignore rules
 ├── tooling/
-│   └── setup_cross_env.sh           # Pre-build environment setup
-└── README.md                        # This file
+│   └── setup_cross_env.sh      # Pre-build environment setup
+└── README.md                   # This file
 ```
 
 ## Technical Details
