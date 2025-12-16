@@ -1,15 +1,20 @@
 #!/bin/sh
+# Alpine build script for C/C++ projects (autoconf, make, cmake)
+# For Rust/cargo projects, grow_glochidium.sh uses debian-build.sh instead
 set -e
 cd /src
 
 # Install build dependencies
 echo "Installing build tools..."
-apk add --no-cache build-base wget curl git autoconf automake libtool pkgconfig gawk rust cargo cmake linux-headers
+apk add --no-cache build-base wget curl git autoconf automake libtool pkgconfig gawk cmake linux-headers
 
 # Run build command (passed from host)
 echo "Starting build..."
-# For Rust projects that need nightly features, set RUSTC_BOOTSTRAP=1
-export RUSTC_BOOTSTRAP=1
+# For CMake and autoconf to prefer static libraries
+export LDFLAGS="-static"
+export CFLAGS="-static"
+export CXXFLAGS="-static"
+
 eval "$BUILD_COMMAND"
 
 # Find and prepare artifact
