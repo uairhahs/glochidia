@@ -5,6 +5,7 @@ Universal native build and deployment tool for building projects targeting x86_6
 ## Overview
 
 This repository provides a streamlined pipeline to:
+
 - Clone any git repository or download tarballs
 - Auto-detect or specify build systems (Makefile, CMake, custom build scripts)
 - Build natively in Alpine Linux containers with musl for maximum compatibility
@@ -13,6 +14,7 @@ This repository provides a streamlined pipeline to:
 ## Prerequisites
 
 ### Required Tools
+
 - **podman** - For containerized native Alpine builds
 - **git** - For cloning repositories
 - **bash** - For pipeline execution
@@ -37,12 +39,15 @@ ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N ""
 Then copy the public key to your target device.
 
 ### Optional
+
 - **cmake** - Already available in Alpine containers
 - **make** - Already available in Alpine containers
 - **cargo** - Already available in Alpine containers for Rust projects
 
 ### Container Images
+
 The build system automatically selects the appropriate container:
+
 - `alpine:latest` - For C/C++ projects (autoconf, cmake, make) - native musl static linking
 - `debian:bookworm-slim` - For Rust/cargo projects - gnu host cross-compiles to musl target for static binaries
 
@@ -62,6 +67,7 @@ grow_glochidium.sh <source_url> <binary_name>
 ```
 
 The script will:
+
 1. Prompt for deployment credentials (DEPLOY_USER, DEPLOY_HOST, DEPLOY_PATH)
 2. Clone the repository
 3. Auto-detect the build system
@@ -112,6 +118,7 @@ Or set inline:
 DEPLOY_USER=user DEPLOY_HOST=<ssh_target> DEPLOY_PATH=<destination_path> \
   grow_glochidium.sh https://github.com/user/project binary_name
 ```
+
 - Note: assure that the DEPLOY_PATH is added to your $PATH on the ssh target to use the binaries globally
 
 ## Building Projects with Glochidia
@@ -119,13 +126,16 @@ DEPLOY_USER=user DEPLOY_HOST=<ssh_target> DEPLOY_PATH=<destination_path> \
 All builds happen natively in Alpine Linux containers for maximum compatibility.
 
 ### Alpine Container Includes
+
 - **build-base** - GCC, Make, binutils, musl-dev
 - **autoconf, automake** - For autotools projects
 - **git, curl, wget** - For fetching dependencies
 - **libtool, pkgconfig** - For complex projects
 
 ### Pre-Build Fixes
+
 The pipeline automatically applies compatibility fixes for common musl/Alpine issues:
+
 - Fixes `getenv()` and `getopt()` declarations in sources like fnmatch.c and getopt.c/h
 - Ensures proper header resolution for projects with complex directory structures
 - Strips binaries for smaller deployment size
@@ -172,6 +182,7 @@ The deployment script performs:
 
 Clone and build fastfetch, deploy to embedded device:
 e.g.
+
 ```bash
 grow_glochidium.sh https://github.com/fastfetch-cli/fastfetch fastfetch
 Enter DEPLOY_USER: <your_remote_user>
@@ -182,7 +193,6 @@ Enter DEPLOY_PATH: <destination_path>
 With environment variables (no prompts):
 
 ```bash
-DEPLOY_USER=uddin DEPLOY_HOST=<ssh_target> DEPLOY_PATH=<destination_path> \
   grow_glochidium.sh https://github.com/fastfetch-cli/fastfetch fastfetch
 ```
 
@@ -192,13 +202,14 @@ With custom CMake build flags:
 grow_glochidium.sh https://github.com/fastfetch-cli/fastfetch fastfetch \
   "mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DENABLE_DRM=OFF .. && make"
 ```
+
+```bash
 grow_glochidium.sh <repo_url> <binary_name> "make -f custom.mk"
 ```
 
-
 ## Project Structure
 
-```
+```txt
 glochidia/
 ├── grow_glochidium.sh          # Universal native build & deploy script
 ├── alpine-build.sh             # Container-side build executor (C/C++ projects)
@@ -213,12 +224,14 @@ glochidia/
 ### Native Compilation with musl
 
 All builds run natively in Alpine Linux containers:
+
 - **Base Image:** alpine:latest (3.20 or later)
 - **Libc:** musl (native compilation, not cross-compiled)
 - **Linking:** Static by default (musl + static libraries)
 - **Toolchain:** Native gcc, make, autotools, cargo, cmake on x86_64
 
 Benefits of native Alpine builds:
+
 - **Maximum Compatibility** - No cross-compiler quirks, fully native toolchain behavior
 - **Simple, Reliable** - Fewer header/path resolution issues
 - **Portable Binaries** - Static musl builds run on any x86_64 Linux system
@@ -229,6 +242,7 @@ Benefits of native Alpine builds:
 ### Alpine Container Build Process
 
 For each build, the pipeline:
+
 1. Starts a fresh Alpine container with build-base and development tools
 2. Mounts the project source at `/src` inside container
 3. Installs build dependencies: autoconf, automake, libtool, cargo, cmake, linux-headers, etc.
@@ -238,6 +252,7 @@ For each build, the pipeline:
 7. Removes container and cleans up
 
 Benefits of musl static linking:
+
 - Single, portable binary
 - No runtime glibc dependency
 - Runs on any x86_64 Linux system (buildroot, Alpine, embedded systems)
@@ -246,6 +261,7 @@ Benefits of musl static linking:
 ### Cross-Compilation via Podman
 
 Unlike traditional cross-compilation:
+
 - **No native toolchain installation** needed on host
 - **No cross-compiler setup** required
 - **Native builds inside container** using Alpine's native gcc, cargo, cmake
@@ -255,14 +271,16 @@ Unlike traditional cross-compilation:
   - Extract compiled binaries from container
 
 This approach:
+
 - Eliminates toolchain installation burden
-- Ensures consistent build environment across systems  
+- Ensures consistent build environment across systems
 - Works on any system with podman installed
 - Leverages Alpine's lightweight, efficient native toolchain
 
 ### Supported Build Systems
 
 Auto-detection supports:
+
 - **Makefile** - Standard GNU Make projects (gawk, GNU Make, etc.)
 - **build.sh** - Custom shell build scripts
 - **CMakeLists.txt** - CMake-based projects (fastfetch, etc.)
@@ -273,6 +291,7 @@ For unsupported systems, provide a custom build command as the 3rd parameter.
 ### Known Compatibility Fixes
 
 The build containers handle most projects automatically:
+
 - **Rust projects** - Uses Debian container with gnu host, cross-compiles to x86_64-unknown-linux-musl
 - **Rust static linking** - Sets `RUSTFLAGS="-C target-feature=+crt-static -C relocation-model=static"` for fully static binaries
 - **CMake projects** - Includes `-DBUILD_SHARED_LIBS=OFF` to disable shared libraries
@@ -292,20 +311,22 @@ ldd <binary_name>
 # Output: not a dynamic executable
 ```
 
-
 ## Troubleshooting
 
 ### Build fails with container not found
+
 - Ensure podman is installed: `podman --version`
 - Alpine image will be pulled automatically on first run
 - Manual pull: `podman pull alpine:latest`
 
 ### Build fails during compilation
+
 - Check for musl/Alpine compatibility issues in the error output
 - Additional compatibility fixes can be added to the build script in `grow_glochidium.sh`
 - For complex projects, provide a custom build command with necessary flags
 
 ### Binary fails with "required file not found" on target device
+
 - **Cause:** Binary has dynamic library dependencies that don't exist on the target system
 - **Solution:** Ensure binaries are statically linked
   - Verify on build host: `file <binary_name>` should show "statically linked"
@@ -315,6 +336,7 @@ ldd <binary_name>
 - **For Autoconf projects:** Verify `LDFLAGS="-static"` is passed during configure
 
 ### Deployment fails due to SSH
+
 - Verify remote device IP and SSH credentials
 - Test SSH connectivity: `ssh your_username@your.device.ip 'echo OK'`
 - Ensure DEPLOY_PATH exists or is writable on remote device
@@ -323,6 +345,7 @@ ldd <binary_name>
 ## Contributing
 
 Changes should:
+
 1. Maintain C99 compatibility
 2. Compile cleanly with `-Wall -Werror`
 3. Work when statically linked with musl
