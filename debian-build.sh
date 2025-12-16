@@ -14,6 +14,7 @@ echo "Installing Rust..."
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
 export PATH="/root/.cargo/bin:$PATH"
 rustup target add x86_64-unknown-linux-musl
+rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
 
 # Run build command (passed from host)
 echo "Starting build..."
@@ -36,20 +37,42 @@ eval "$BUILD_COMMAND"
 
 # Find and prepare artifact
 echo "Finding artifact..."
-if [ -f "$ARTIFACT_NAME" ]; then
-    ARTIFACT="$ARTIFACT_NAME"
-elif [ -f "out/$ARTIFACT_NAME" ]; then
-    ARTIFACT="out/$ARTIFACT_NAME"
-elif [ -f "build/$ARTIFACT_NAME" ]; then
-    ARTIFACT="build/$ARTIFACT_NAME"
-elif [ -f "target/x86_64-unknown-linux-musl/release/$ARTIFACT_NAME" ]; then
-    ARTIFACT="target/x86_64-unknown-linux-musl/release/$ARTIFACT_NAME"
-elif [ -f "target/release/$ARTIFACT_NAME" ]; then
-    ARTIFACT="target/release/$ARTIFACT_NAME"
-else
+ARTIFACT=""
+
+# Search paths in order of priority
+SEARCH_PATHS="
+    $ARTIFACT_NAME
+    out/$ARTIFACT_NAME
+    build/$ARTIFACT_NAME
+    target/x86_64-unknown-linux-musl/release/$ARTIFACT_NAME
+    target/release/$ARTIFACT_NAME
+"
+
+for path in $SEARCH_PATHS; do
+    if [ -f "$path" ]; then
+        ARTIFACT="$path"
+        break
+    fi
+done
+
+# If not found, search for any executable in common cargo output directories
+if [ -z "$ARTIFACT" ]; then
+    echo "Artifact '$ARTIFACT_NAME' not found by name, searching for executables..."
+    # First try musl target directory
+    if [ -d "target/x86_64-unknown-linux-musl/release" ]; then
+        ARTIFACT=$(find "target/x86_64-unknown-linux-musl/release" -maxdepth 1 -type f -executable ! -name "*.d" ! -name "*.rlib" ! -name "*.rmeta" ! -name "*.so" 2>/dev/null | head -1)
+    fi
+    # Fall back to regular release directory
+    if [ -z "$ARTIFACT" ] && [ -d "target/release" ]; then
+        ARTIFACT=$(find "target/release" -maxdepth 1 -type f -executable ! -name "*.d" ! -name "*.rlib" ! -name "*.rmeta" ! -name "*.so" 2>/dev/null | head -1)
+    fi
+fi
+
+if [ -z "$ARTIFACT" ]; then
     echo "Error: Artifact not found"
     echo "Searched in: ., out/, build/, target/x86_64-unknown-linux-musl/release/, target/release/"
-    find target -name "$ARTIFACT_NAME" 2>/dev/null || true
+    echo "Available files in target directories:"
+    find target -type f -name "*" 2>/dev/null | grep -E "release/[^/]+$" | head -20 || true
     exit 1
 fi
 
