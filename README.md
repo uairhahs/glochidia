@@ -1,13 +1,13 @@
 # Glochidia
 
-Universal cross-compilation and deployment tool for building projects targeting x86_64 embedded Linux systems with musl.
+Universal native build and deployment tool for building projects targeting x86_64 embedded Linux systems with musl.
 
 ## Overview
 
 This repository provides a streamlined pipeline to:
-- Clone any git repository
+- Clone any git repository or download tarballs
 - Auto-detect or specify build systems (Makefile, CMake, custom build scripts)
-- Cross-compile for x86_64 using musl static linking
+- Build natively in Alpine Linux containers with musl for maximum compatibility
 - Deploy compiled binaries to remote devices via SSH/rsync
 
 ## Prerequisites
@@ -36,27 +36,27 @@ ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N ""
 
 Then copy the public key to your target device.
 
-### Recommended
-- **cmake** - For CMake-based projects
-- **make** - For Make-based projects
+### Optional
+- **cmake** - Already available in Alpine containers
+- **make** - Already available in Alpine containers
 
 ### Container Images
 The build system automatically uses:
-- `ghcr.io/cross-rs/x86_64-unknown-linux-musl:latest` - x86_64 musl cross-compiler
+- `alpine:latest` - Lightweight Linux with native musl gcc toolchain
 
 ## Usage
 
-### Install the Tool
+### Enter repo and set execute
 
 ```bash
-cp grow_glochidium.sh ~/bin/
-chmod +x ~/bin/grow_glochidium.sh
+cd glochidia
+chmod +x grow_glochidium.sh
 ```
 
-### Quick Start
+### Quick Start (git repo or tarball)
 
 ```bash
-grow_glochidium.sh <repository_url> <binary_name>
+grow_glochidium.sh <source_url> <binary_name>
 ```
 
 The script will:
@@ -66,10 +66,16 @@ The script will:
 4. Cross-compile for x86_64
 5. Deploy to target device
 
-**Example:**
+**Example (git):**
 
 ```bash
 grow_glochidium.sh https://github.com/fastfetch-cli/fastfetch fastfetch
+```
+
+**Example (tarball):**
+
+```bash
+grow_glochidium.sh https://ftp.gnu.org/gnu/gawk/gawk-5.3.1.tar.gz gawk
 ```
 
 ### Custom Build Commands
@@ -106,36 +112,21 @@ DEPLOY_USER=user DEPLOY_HOST=<ssh_target> DEPLOY_PATH=<destination_path> \
 ```
 - Note: assure that the DEPLOY_PATH is added to your $PATH on the ssh target to use the binaries globally
 
-## Building Locally (This Repository)
+## Building Projects with Glochidia
 
-For testing this glochidia pipeline itself:
+All builds happen natively in Alpine Linux containers for maximum compatibility.
 
-### Option 1: Using the Makefile
+### Alpine Container Includes
+- **build-base** - GCC, Make, binutils, musl-dev
+- **autoconf, automake** - For autotools projects
+- **git, curl, wget** - For fetching dependencies
+- **libtool, pkgconfig** - For complex projects
 
-```bash
-git clone https://github.com/uairhahs/glochidia.git
-cd glochidia
-make clean
-make
-```
-
-The Makefile automatically:
-- Detects and uses the `x86_64-linux-musl-gcc` wrapper
-- Applies the `-static` flag for musl static linking
-- Cross-compiles via podman container
-
-### Option 2: Manual Cross-Compilation
-
-```bash
-# Using the wrapper script directly
-x86_64-linux-musl-gcc -Wall -Werror -Os -std=c99 -static -o glochidia_app glochidia_app.c
-```
-
-### Option 3: Using Native Compiler (if available)
-
-```bash
-CC=x86_64-linux-musl-gcc make
-```
+### Pre-Build Fixes
+The pipeline automatically applies compatibility fixes for common musl/Alpine issues:
+- Fixes `getenv()` and `getopt()` declarations in sources like fnmatch.c and getopt.c/h
+- Ensures proper header resolution for projects with complex directory structures
+- Strips binaries for smaller deployment size
 
 ## How It Works
 
@@ -143,22 +134,24 @@ CC=x86_64-linux-musl-gcc make
 
 The `grow_glochidium.sh` script automatically detects:
 
-- **Makefile** - Runs `make clean && make`
+- **Makefile** - Runs `make -j$(nproc)`
 - **build.sh** - Runs `bash build.sh`
-- **CMakeLists.txt** - Runs `mkdir -p build && cd build && cmake .. && make`
+- **CMakeLists.txt** - Runs `mkdir -p build && cd build && cmake .. && make -j$(nproc)`
 
 For unsupported build systems, provide a custom build command as the 3rd parameter.
 
-### Cross-Compilation Pipeline
+### Native Alpine Build Pipeline
 
-1. **Clone Repository** - Fetches the target project
-2. **Setup x86_64 musl Compiler** - Prepares cross-compilation environment
-3. **Build System Detection** - Identifies how to compile the project
-4. **Cross-Compile** - Builds for x86_64 with musl static linking
-5. **Binary Verification** - Confirms the binary was created
-6. **Create Remote Directory** - Ensures deployment path exists on target device
-7. **Deploy via rsync** - Transfers binary over SSH
-8. **Cleanup** - Removes temporary build directory
+1. **Download Source** - Clones git repo or extracts tarball
+2. **Create Build Container** - Spins up Alpine container with build-base
+3. **Apply Compatibility Fixes** - Patches known musl/Alpine issues (getenv, getopt declarations)
+4. **Compile** - Builds natively in Alpine with musl libc
+5. **Strip Binary** - Removes debug symbols for smaller size
+6. **Extract Artifact** - Copies binary from container to host
+7. **Binary Verification** - Confirms static ELF binary
+8. **Create Remote Directory** - Ensures deployment path exists on target device
+9. **Deploy via rsync** - Transfers binary over SSH
+10. **Cleanup** - Removes temporary build directory
 
 ### Deployment
 
@@ -217,13 +210,31 @@ glochidia/
 
 ## Technical Details
 
-### x86_64 musl Static Linking
+### Native Compilation with musl
 
-The build system uses musl for static compilation:
-- **Compiler:** x86_64-linux-musl-gcc
-- **C Standard:** C99
-- **Linking:** Static (`-static` flag)
-- **Optimization:** `-Os` (size optimization)
+All builds run natively in Alpine Linux containers:
+- **Base Image:** alpine:latest
+- **Libc:** musl (native, not cross-compiled)
+- **Linking:** Static by default (`LDFLAGS=-static` in configure)
+- **Toolchain:** Native gcc, make, autotools
+
+Benefits of native Alpine builds:
+- **Maximum Compatibility** - No cross-compiler quirks, native toolchain behavior
+- **Simple, Reliable** - Fewer header/path resolution issues
+- **Portable Binaries** - Static musl builds run on any x86_64 Linux system
+- **Clean Environment** - Fresh Alpine container for each build
+- **Automatic Cleanup** - Container removed after build completes
+
+### Alpine Container Build Process
+
+For each build, the pipeline:
+1. Starts a fresh Alpine container with build-base package group
+2. Mounts the project source at `/src` inside container
+3. Applies any necessary compatibility patches
+4. Runs the build command natively inside Alpine
+5. Strips the resulting binary
+6. Extracts binary back to host
+7. Removes container and cleans up
 
 Benefits of musl static linking:
 - Single, portable binary
@@ -247,10 +258,17 @@ This approach:
 
 Auto-detection supports:
 - **Makefile** - Standard GNU Make projects
-- **build.sh** - Custom shell build scripts
+- **build.sh** - Custom shell build scripts  
 - **CMakeLists.txt** - CMake-based projects
 
 For unsupported systems, provide a custom build command as the 3rd parameter.
+
+### Known Compatibility Fixes
+
+The pipeline automatically handles:
+- **fnmatch.c getenv() conflicts** - Fixed musl header strictness
+- **getopt.c/h conflicts** - Corrected function signatures for musl
+- Any additional fixes needed for specific projects can be added to the build script
 
 ## Binary Verification
 
@@ -267,16 +285,20 @@ ldd <binary_name>
 
 ## Troubleshooting
 
-### Build fails with "x86_64-linux-musl-gcc: No such file or directory"
-- Ensure wrapper script is in `$PATH`: `echo $PATH | grep ~/bin`
-- Copy wrapper: `cp x86_64-linux-musl-gcc ~/bin/`
+### Build fails with container not found
+- Ensure podman is installed: `podman --version`
+- Alpine image will be pulled automatically on first run
+- Manual pull: `podman pull alpine:latest`
 
-### Podman container not found
-- Pull musl image: `podman pull ghcr.io/cross-rs/x86_64-unknown-linux-musl:latest`
+### Build fails during compilation
+- Check for musl/Alpine compatibility issues in the error output
+- Additional compatibility fixes can be added to the build script in `grow_glochidium.sh`
+- For complex projects, provide a custom build command with necessary flags
 
 ### Deployment fails due to SSH
-- Verify remote device IP and SSH credentials in your deploy script
+- Verify remote device IP and SSH credentials
 - Test SSH connectivity: `ssh your_username@your.device.ip 'echo OK'`
+- Ensure DEPLOY_PATH exists or is writable on remote device
 
 ## Contributing
 
@@ -284,7 +306,7 @@ Changes should:
 1. Maintain C99 compatibility
 2. Compile cleanly with `-Wall -Werror`
 3. Work when statically linked with musl
-4. Be tested with: `DEPLOY_USER=user DEPLOY_HOST=ip DEPLOY_PATH=/bin grow_glochidium.sh <repo> <binary>`
+4. Be tested with: `DEPLOY_USER=user DEPLOY_HOST=ip DEPLOY_PATH=/DATA/bin grow_glochidium.sh <repo> <binary>`
 
 ## License
 
