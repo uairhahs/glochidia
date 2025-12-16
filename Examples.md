@@ -35,7 +35,7 @@ bash grow_glochidium.sh https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz make "./c
 ## Gawk 5.3.0 - Native Alpine Build
 
 ```bash
-bash grow_glochidium.sh https://ftp.gnu.org/gnu/gawk/gawk-5.3.2.tar.xz gawk "./configure --prefix=/usr/local && make"
+bash grow_glochidium.sh https://ftp.gnu.org/gnu/gawk/gawk-5.3.2.tar.xz gawk "./configure LDFLAGS=-static && make -j\\$(nproc)"
 ```
 
 ## ble.sh - Shell-based Example
@@ -53,7 +53,7 @@ bash grow_glochidium.sh https://github.com/starship/starship.git starship "cargo
 ## fastefetch
 
 ```bash
-bash grow_glochidium.sh https://github.com/fastfetch-cli/fastfetch.git fastfetch "cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build"
+bash grow_glochidium.sh https://github.com/fastfetch-cli/fastfetch.git fastfetch "cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF && cmake --build build"
 ```
 
 **To be tested:**

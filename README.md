@@ -42,8 +42,9 @@ Then copy the public key to your target device.
 - **cargo** - Already available in Alpine containers for Rust projects
 
 ### Container Images
-The build system automatically uses:
-- `alpine:latest` - Lightweight Linux with native musl gcc, cargo, cmake, and full build toolchain
+The build system automatically selects the appropriate container:
+- `alpine:latest` - For C/C++ projects (autoconf, cmake, make) - native musl static linking
+- `debian:bookworm-slim` - For Rust/cargo projects - gnu host cross-compiles to musl target for static binaries
 
 ## Usage
 
@@ -199,9 +200,10 @@ grow_glochidium.sh <repo_url> <binary_name> "make -f custom.mk"
 
 ```
 glochidia/
-├── Makefile                    # Build configuration
 ├── grow_glochidium.sh          # Universal native build & deploy script
-├── alpine-build.sh             # Container-side build executor
+├── alpine-build.sh             # Container-side build executor (C/C++ projects)
+├── debian-build.sh             # Container-side build executor (Rust/cargo projects)
+├── Examples.md                 # Build examples for various projects
 ├── .gitignore                  # Git ignore rules
 └── README.md                   # This file
 ```
@@ -270,11 +272,13 @@ For unsupported systems, provide a custom build command as the 3rd parameter.
 
 ### Known Compatibility Fixes
 
-The Alpine container environment handles most projects automatically:
-- **Rust projects** - Sets `RUSTC_BOOTSTRAP=1` to enable nightly features on stable compiler
-- **CMake projects** - Includes linux-headers for kernel interface headers
-- **Complex projects** - Comprehensive build-base with autoconf, automake, libtool, pkgconfig
-- **Musl compatibility** - Automatically applies fixes for getenv(), getopt() where needed
+The build containers handle most projects automatically:
+- **Rust projects** - Uses Debian container with gnu host, cross-compiles to x86_64-unknown-linux-musl
+- **Rust static linking** - Sets `RUSTFLAGS="-C target-feature=+crt-static -C relocation-model=static"` for fully static binaries
+- **CMake projects** - Includes `-DBUILD_SHARED_LIBS=OFF` to disable shared libraries
+- **C/Autoconf projects** - Sets `LDFLAGS="-static" CFLAGS="-static"` to enforce static linking
+- **Linux headers** - Includes linux-headers for projects requiring kernel interface headers
+- **Musl compatibility** - Handles musl-specific issues automatically
 
 ## Binary Verification
 
@@ -301,10 +305,20 @@ ldd <binary_name>
 - Additional compatibility fixes can be added to the build script in `grow_glochidium.sh`
 - For complex projects, provide a custom build command with necessary flags
 
+### Binary fails with "required file not found" on target device
+- **Cause:** Binary has dynamic library dependencies that don't exist on the target system
+- **Solution:** Ensure binaries are statically linked
+  - Verify on build host: `file <binary_name>` should show "statically linked"
+  - Check with: `ldd <binary_name>` should output "not a dynamic executable"
+- **For Cargo projects:** Verify the target system matches or use `x86_64-unknown-linux-musl` target
+- **For CMake projects:** Ensure `-DBUILD_SHARED_LIBS=OFF` is used (default in auto-detection)
+- **For Autoconf projects:** Verify `LDFLAGS="-static"` is passed during configure
+
 ### Deployment fails due to SSH
 - Verify remote device IP and SSH credentials
 - Test SSH connectivity: `ssh your_username@your.device.ip 'echo OK'`
 - Ensure DEPLOY_PATH exists or is writable on remote device
+- For buildroot systems, ensure /DATA/bin exists and is in $PATH
 
 ## Contributing
 

@@ -98,7 +98,7 @@ if [ -z "$BUILD_COMMAND" ]; then
     elif [ -f "$PROJECT_DIR/build.sh" ]; then
         BUILD_COMMAND="bash build.sh"
     elif [ -f "$PROJECT_DIR/CMakeLists.txt" ]; then
-        BUILD_COMMAND="mkdir -p build && cd build && cmake .. && make -j\$(nproc)"
+        BUILD_COMMAND="mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF .. && make -j\$(nproc)"
     else
         echo "Error: Could not detect build system (Makefile, build.sh, or CMakeLists.txt not found)"
         echo "Provide build command as 3rd argument: grow_glochidium.sh <url> <binary> '<build_cmd>'"
@@ -107,30 +107,39 @@ if [ -z "$BUILD_COMMAND" ]; then
 fi
 echo "Build command: $BUILD_COMMAND"
 
-# 3. Build natively in Alpine container
-echo "3. Building in Alpine container..."
-
-# Find the alpine-build.sh script (same directory as this script or in PATH)
+# 3. Build in container
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BUILD_SCRIPT="$SCRIPT_DIR/alpine-build.sh"
+
+# Use Debian for Rust/cargo builds (proc-macros need gnu host), Alpine for everything else
+if echo "$BUILD_COMMAND" | grep -q "cargo"; then
+    echo "3. Building Rust project in Debian container (cross-compile to musl)..."
+    BUILD_SCRIPT="$SCRIPT_DIR/debian-build.sh"
+    CONTAINER_IMAGE="debian:bookworm-slim"
+    SCRIPT_NAME="debian-build.sh"
+else
+    echo "3. Building in Alpine container..."
+    BUILD_SCRIPT="$SCRIPT_DIR/alpine-build.sh"
+    CONTAINER_IMAGE="alpine:latest"
+    SCRIPT_NAME="alpine-build.sh"
+fi
 
 if [ ! -f "$BUILD_SCRIPT" ]; then
-    echo "Error: alpine-build.sh not found in $SCRIPT_DIR"
+    echo "Error: $SCRIPT_NAME not found in $SCRIPT_DIR"
     exit 1
 fi
 
 # Ensure output directory exists before running container
 mkdir -p "$BUILD_DIR"
 
-# Run build in Alpine container
+# Run build in container
 $CONTAINER_RUNTIME run --rm \
     -v "$PROJECT_DIR":/src \
     -v "$BUILD_DIR":/output \
-    -v "$BUILD_SCRIPT":/alpine-build.sh:ro \
+    -v "$BUILD_SCRIPT":/$SCRIPT_NAME:ro \
     -e BUILD_COMMAND="$BUILD_COMMAND" \
     -e ARTIFACT_NAME="$BINARY_NAME" \
-    alpine:latest \
-    sh /alpine-build.sh
+    "$CONTAINER_IMAGE" \
+    sh /$SCRIPT_NAME
 
 echo "Build complete"
 
