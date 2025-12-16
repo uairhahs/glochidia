@@ -20,10 +20,10 @@ The `grow_glochidium.sh` script uses **native container builds in Alpine** inste
 
 **Status**: ✅ Successfully tested and deployed
 
-## Msedit 0.9.10
+## Microsoft Edit
 
 ```bash
-bash grow_glochidium.sh https://github.com/microsoft/edit msedit "cargo build --release"
+bash grow_glochidium.sh https://github.com/microsoft/edit msedit "cargo build --config .cargo/release-nightly.toml --release"
 ```
 
 ## GNU Make 4.4.1

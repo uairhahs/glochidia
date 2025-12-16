@@ -8,7 +8,7 @@ set -e
 REPO_URL="${1:?Error: Repository or tarball URL required. Usage: grow_glochidium.sh <repo_or_tar_url> <binary_name> [build_command]}"
 BINARY_NAME="${2:?Error: Binary name required. Usage: grow_glochidium.sh <repo_or_tar_url> <binary_name> [build_command]}"
 BUILD_COMMAND="${3:-}"
-BUILD_DIR="/tmp/glochidia_build_$$"
+BUILD_DIR="/tmp/glochidium_build_$$"
 PROJECT_DIR="$BUILD_DIR/project"
 IS_TARBALL=false
 TARBALL_FILE=""
@@ -192,13 +192,20 @@ ssh "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH'" || {
     exit 1
 }
 
+# Rename artifact to requested name if different
+ARTIFACT_BASENAME=$(basename "$ARTIFACT_PATH")
+if [ "$ARTIFACT_BASENAME" != "$BINARY_NAME" ]; then
+    echo "Renaming artifact: $ARTIFACT_BASENAME -> $BINARY_NAME"
+    mv "$ARTIFACT_PATH" "$BUILD_DIR/$BINARY_NAME"
+    ARTIFACT_PATH="$BUILD_DIR/$BINARY_NAME"
+fi
+
 rsync -av --progress "$ARTIFACT_PATH" "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/" || {
     echo "Deployment failed"
     exit 1
 }
 
-DEPLOYED_NAME=$(basename "$ARTIFACT_PATH")
-echo "Deployment complete: $DEPLOYED_NAME deployed to $DEPLOY_HOST:$DEPLOY_PATH"
+echo "Deployment complete: $BINARY_NAME deployed to $DEPLOY_HOST:$DEPLOY_PATH"
 echo
 
 # 6. Cleanup
