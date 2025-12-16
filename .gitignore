@@ -25,3 +25,6 @@ Thumbs.db
 # Build output
 target/
 build/
+
+# Trunk generated outputs
+.trunk/out/
