@@ -1,13 +1,18 @@
 #!/bin/bash
-# Cross-compile and deploy a remote project to embedded Linux target
+# Native Alpine container build and deploy to embedded Linux target
 # Usage: grow_glochidium.sh <repo_url> <binary_name> [build_command]
 
 set -e
 
 # ============ PARAMETERS ============
-REPO_URL="${1:?Error: Repository URL required. Usage: grow_glochidium.sh <repo_url> <binary_name> [build_command]}"
-BINARY_NAME="${2:?Error: Binary name required. Usage: grow_glochidium.sh <repo_url> <binary_name> [build_command]}"
+REPO_URL="${1:?Error: Repository or tarball URL required. Usage: grow_glochidium.sh <repo_or_tar_url> <binary_name> [build_command]}"
+BINARY_NAME="${2:?Error: Binary name required. Usage: grow_glochidium.sh <repo_or_tar_url> <binary_name> [build_command]}"
 BUILD_COMMAND="${3:-}"
+BUILD_DIR="/tmp/glochidia_build_$$"
+PROJECT_DIR="$BUILD_DIR/project"
+IS_TARBALL=false
+TARBALL_FILE=""
+CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-podman}"
 
 # ============ CONFIGURATION ============
 # Check if deployment variables are set, prompt if not
@@ -47,72 +52,122 @@ if ! verify_ssh_setup "$DEPLOY_USER" "$DEPLOY_HOST"; then
 fi
 echo "SSH connectivity verified"
 echo
-WRAPPER_SCRIPT="x86_64-linux-musl-gcc"
 
 # ============ PIPELINE ============
 
-echo "--- Starting Cross-Compilation & Deployment Pipeline ---"
-echo "Repository: $REPO_URL"
+echo "--- Starting Native Alpine Build & Deployment Pipeline ---"
+echo "Source: $REPO_URL"
 echo "Binary: $BINARY_NAME"
 echo "Target: $DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH"
 echo
 
-# 1. Clone Repository
-echo "1. Cloning repository..."
+# 1. Fetch Source
 mkdir -p "$BUILD_DIR"
-git clone "$REPO_URL" "$BUILD_DIR/project" 2>&1 | grep -E "(Cloning|done)" || true
-cd "$BUILD_DIR/project"
-echo "Repository cloned to $BUILD_DIR/project"
 
-# 2. Copy Wrapper Script
-echo "2. Setting up x86_64 musl cross-compiler..."
-if command -v x86_64-linux-musl-gcc &> /dev/null; then
-    # Wrapper is already in PATH, find it
-    WRAPPER_PATH=$(which x86_64-linux-musl-gcc)
-    cp "$WRAPPER_PATH" .
+if [[ "$REPO_URL" =~ \.tar\.(gz|xz|bz2)$ || "$REPO_URL" =~ \.tgz$ ]]; then
+    IS_TARBALL=true
+    echo "1. Downloading tarball..."
+    TARBALL_FILE="$BUILD_DIR/$(basename "$REPO_URL")"
+    wget -q "$REPO_URL" -O "$TARBALL_FILE"
+    echo "Tarball downloaded: $TARBALL_FILE"
+    echo "Extracting..."
+    tar xf "$TARBALL_FILE" -C "$BUILD_DIR"
+    TOP_DIR=$(tar tf "$TARBALL_FILE" | head -1 | cut -d/ -f1)
+    if [ -z "$TOP_DIR" ] || [ ! -d "$BUILD_DIR/$TOP_DIR" ]; then
+        echo "Error: Could not determine top-level directory from tarball"
+        exit 1
+    fi
+    PROJECT_DIR="$BUILD_DIR/$TOP_DIR"
+    echo "Source extracted to $PROJECT_DIR"
 else
-    echo "Error: x86_64-linux-musl-gcc wrapper not found in PATH"
-    echo "Install it with: cp /path/to/x86_64-linux-musl-gcc ~/bin/"
-    exit 1
+    echo "1. Cloning repository..."
+    git clone "$REPO_URL" "$PROJECT_DIR" 2>&1 | grep -E "(Cloning|done)" || true
+    echo "Repository cloned to $PROJECT_DIR"
+    if [ ! -d "$PROJECT_DIR" ]; then
+        echo "Error: Project directory was not created at $PROJECT_DIR"
+        exit 1
+    fi
+    echo "Verified: $PROJECT_DIR exists ($(ls -la "$PROJECT_DIR" | wc -l) entries)"
 fi
-export PATH=".:$PATH"
-echo "Wrapper script ready"
 
-# 3. Cross-Compile
-echo "3. Cross-compiling for x86_64..."
-
-# Detect build system if not specified
+# 2. Detect build system if not specified
+echo "2. Preparing build environment..."
 if [ -z "$BUILD_COMMAND" ]; then
-    if [ -f "Makefile" ] || [ -f "makefile" ]; then
-        BUILD_COMMAND="make clean && make"
-    elif [ -f "build.sh" ]; then
+    if [ -f "$PROJECT_DIR/Makefile" ] || [ -f "$PROJECT_DIR/makefile" ]; then
+        BUILD_COMMAND="make -j\$(nproc)"
+    elif [ -f "$PROJECT_DIR/build.sh" ]; then
         BUILD_COMMAND="bash build.sh"
-    elif [ -f "CMakeLists.txt" ]; then
-        BUILD_COMMAND="mkdir -p build && cd build && cmake .. && make"
+    elif [ -f "$PROJECT_DIR/CMakeLists.txt" ]; then
+        BUILD_COMMAND="mkdir -p build && cd build && cmake .. && make -j\$(nproc)"
     else
         echo "Error: Could not detect build system (Makefile, build.sh, or CMakeLists.txt not found)"
         echo "Provide build command as 3rd argument: grow_glochidium.sh <url> <binary> '<build_cmd>'"
         exit 1
     fi
 fi
+echo "Build command: $BUILD_COMMAND"
 
-echo "Using build command: $BUILD_COMMAND"
-eval "$BUILD_COMMAND" || { echo "Build failed"; exit 1; }
-echo "Build complete"
+# 3. Build natively in Alpine container
+echo "3. Building in Alpine container..."
 
-# 4. Verify Binary
-echo "4. Verifying binary..."
-if [ ! -f "$BINARY_NAME" ]; then
-    echo "Error: Binary '$BINARY_NAME' not found after compilation"
+# Find the alpine-build.sh script (same directory as this script or in PATH)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BUILD_SCRIPT="$SCRIPT_DIR/alpine-build.sh"
+
+if [ ! -f "$BUILD_SCRIPT" ]; then
+    echo "Error: alpine-build.sh not found in $SCRIPT_DIR"
     exit 1
 fi
-file "$BINARY_NAME" | grep -q "statically linked" && {
-    echo "Binary '$BINARY_NAME' verified as statically linked"
-} || {
-    echo "Warning: Binary may not be statically linked"
-    echo "Proceeding with deployment..."
-    echo "Test binary on target device to confirm functionality after deployment"
-}
+
+# Ensure output directory exists before running container
+mkdir -p "$BUILD_DIR"
+
+# Run build in Alpine container
+$CONTAINER_RUNTIME run --rm \
+    -v "$PROJECT_DIR":/src \
+    -v "$BUILD_DIR":/output \
+    -v "$BUILD_SCRIPT":/alpine-build.sh:ro \
+    -e BUILD_COMMAND="$BUILD_COMMAND" \
+    -e ARTIFACT_NAME="$BINARY_NAME" \
+    alpine:latest \
+    sh /alpine-build.sh
+
+echo "Build complete"
+
+# 4. Verify Artifact
+echo "4. Verifying artifact..."
+
+# Extract artifact from build dir
+ARTIFACT_PATH=""
+if [ -f "$BUILD_DIR/$BINARY_NAME" ]; then
+    ARTIFACT_PATH="$BUILD_DIR/$BINARY_NAME"
+elif [ -f "$BUILD_DIR/$BINARY_NAME.sh" ]; then
+    ARTIFACT_PATH="$BUILD_DIR/$BINARY_NAME.sh"
+else
+    # Fallback: search for any executable file in build dir (for cases where binary name differs from build output)
+    ARTIFACT_PATH=$(find "$BUILD_DIR" -maxdepth 1 -type f \( -executable -o -name "*.sh" \) 2>/dev/null | head -1)
+fi
+
+if [ -z "$ARTIFACT_PATH" ]; then
+    echo "Error: Artifact '$BINARY_NAME' not found after compilation"
+    echo "Searched: $BUILD_DIR/$BINARY_NAME, $BUILD_DIR/$BINARY_NAME.sh"
+    echo "Available files in $BUILD_DIR:"
+    ls -la "$BUILD_DIR" || true
+    exit 1
+fi
+
+# Check if it's a binary executable or script
+if file "$ARTIFACT_PATH" | grep -q "ELF"; then
+    echo "Artifact '$ARTIFACT_PATH' verified as ELF binary (musl/static)"
+elif file "$ARTIFACT_PATH" | grep -q "text"; then
+    echo "Artifact '$ARTIFACT_PATH' verified as shell script"
+    if [ ! -x "$ARTIFACT_PATH" ]; then
+        chmod +x "$ARTIFACT_PATH"
+        echo "Made artifact executable"
+    fi
+else
+    echo "Artifact '$ARTIFACT_PATH' found ($(file "$ARTIFACT_PATH" | cut -d: -f2-))"
+fi
 
 # 5. Deploy via SSH/rsync
 echo "5. Deploying binary to remote device..."
@@ -128,17 +183,17 @@ ssh "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH'" || {
     exit 1
 }
 
-rsync -av --progress "$BINARY_NAME" "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/" || {
+rsync -av --progress "$ARTIFACT_PATH" "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/" || {
     echo "Deployment failed"
     exit 1
 }
 
-echo "Deployment complete: $BINARY_NAME deployed to $DEPLOY_HOST:$DEPLOY_PATH"
+DEPLOYED_NAME=$(basename "$ARTIFACT_PATH")
+echo "Deployment complete: $DEPLOYED_NAME deployed to $DEPLOY_HOST:$DEPLOY_PATH"
 echo
 
 # 6. Cleanup
 echo "6. Cleaning up build directory..."
-cd /
 rm -rf "$BUILD_DIR"
 echo "Build directory removed"
 
