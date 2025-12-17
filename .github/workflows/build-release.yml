@@ -111,9 +111,8 @@ jobs:
               wget -q $SOURCE_URL
               tar xzf $(basename $SOURCE_URL)
               cd make-$VERSION
-              bash ../../tooling/setup_cross_env.sh .
               ./configure LDFLAGS="-static"
-              make LDFLAGS="-static"
+              make -j$(nproc)
               strip make
               cp make ../../$NAME-bin
           - name: gawk
@@ -126,9 +125,8 @@ jobs:
               wget -q $SOURCE_URL
               tar xJf $(basename $SOURCE_URL)
               cd gawk-$VERSION
-              bash ../../tooling/setup_cross_env.sh .
               ./configure LDFLAGS="-static"
-              make LDFLAGS="-static"
+              make -j$(nproc)
               strip gawk
               cp gawk ../../$NAME-bin
     container:
