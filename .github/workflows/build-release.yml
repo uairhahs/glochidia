@@ -34,6 +34,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install GNU tar for caching
+        run: apk add --no-cache tar
+
       - name: Install build dependencies
         run: apk add --no-cache musl-dev file
 
@@ -102,6 +105,7 @@ jobs:
               wget -q $SOURCE_URL
               tar xzf $(basename $SOURCE_URL)
               cd make-$VERSION
+              sed -i '/^extern char \*getenv/d' lib/fnmatch.c
               ./configure LDFLAGS="-static"
               make LDFLAGS="-static"
               strip make
