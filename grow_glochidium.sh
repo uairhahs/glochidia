@@ -188,25 +188,10 @@ else
 	echo "Artifact '${ARTIFACT_PATH}' found (${file_output})"
 fi
 
-# 5. Deploy via SSH/rsync
-echo "5. Deploying binary to remote device..."
-if [[ -z ${DEPLOY_USER} ]] || [[ -z ${DEPLOY_HOST} ]] || [[ -z ${DEPLOY_PATH} ]]; then
-	echo "Error: DEPLOY_USER, DEPLOY_HOST, and DEPLOY_PATH must be configured"
-	exit 1
-fi
-
-# Note: Always escape variables in remote commands to avoid client-side expansion (SC2029).
-echo "Creating deployment directory..."
-if ssh "${DEPLOY_USER}@${DEPLOY_HOST}" 'mkdir -p -- "$DEPLOY_PATH"' &&
-	ssh "${DEPLOY_USER}@${DEPLOY_HOST}" 'test -d -- "$DEPLOY_PATH"'; then
-	:
-else
-	echo "Error: Failed to create deployment directory on remote device"
-	exit 1
-fi
+# 5. Deploy to GitHub Release
+echo "5. Publishing binary to GitHub Releases..."
 
 # Rename artifact to requested name if different
-
 ARTIFACT_BASENAME=$(basename "${ARTIFACT_PATH}")
 if [[ ${ARTIFACT_BASENAME} != "${BINARY_NAME}" ]]; then
 	echo "Renaming artifact: ${ARTIFACT_BASENAME} -> ${BINARY_NAME}"
@@ -214,17 +199,121 @@ if [[ ${ARTIFACT_BASENAME} != "${BINARY_NAME}" ]]; then
 	ARTIFACT_PATH="${BUILD_DIR}/${BINARY_NAME}"
 fi
 
-# Note: Always escape variables in remote paths to avoid client-side expansion (SC2029).
-rsync -av --progress "${ARTIFACT_PATH}" "${DEPLOY_USER}@${DEPLOY_HOST}:'${DEPLOY_PATH}/'" || {
-	echo "Deployment failed"
-	exit 1
-}
+# Deployment method selection
+DEPLOY_METHOD="${DEPLOY_METHOD:-github}"
 
-echo "Deployment complete: ${BINARY_NAME} deployed to ${DEPLOY_HOST}:${DEPLOY_PATH}"
+if [[ ${DEPLOY_METHOD} == "github" ]]; then
+	# GitHub Release deployment
+	echo "Publishing to GitHub Releases..."
+
+	if [[ -z ${GITHUB_TOKEN-} ]]; then
+		echo "Error: GITHUB_TOKEN must be set for GitHub deployment"
+		exit 1
+	fi
+
+	REPO_OWNER="${REPO_OWNER:-uairhahs}"
+	REPO_NAME="${REPO_NAME:-glochidia}"
+	RELEASE_TAG="${RELEASE_TAG:-latest}"
+
+	# Check if gh CLI is available
+	if command -v gh &>/dev/null; then
+		echo "Using GitHub CLI to upload ${BINARY_NAME}..."
+		gh release upload "${RELEASE_TAG}" "${ARTIFACT_PATH}" \
+			--repo "${REPO_OWNER}/${REPO_NAME}" \
+			--clobber || {
+			echo "GitHub CLI upload failed"
+			exit 1
+		}
+	else
+		# Fallback to curl with GitHub API
+		echo "Using GitHub API to upload ${BINARY_NAME}..."
+
+		# Get release ID
+		RELEASE_ID=$(curl -sS -H "Authorization: token ${GITHUB_TOKEN}" \
+			"https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/tags/${RELEASE_TAG}" |
+			grep '"id":' | head -n 1 | sed 's/[^0-9]*//g')
+
+		if [[ -z ${RELEASE_ID} ]]; then
+			echo "Error: Could not find release with tag '${RELEASE_TAG}'"
+			exit 1
+		fi
+
+		# Upload asset
+		curl -sS -X POST \
+			-H "Authorization: token ${GITHUB_TOKEN}" \
+			-H "Content-Type: application/octet-stream" \
+			--data-binary "@${ARTIFACT_PATH}" \
+			"https://uploads.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/${RELEASE_ID}/assets?name=${BINARY_NAME}" ||
+			{
+				echo "GitHub API upload failed"
+				exit 1
+			}
+	fi
+
+	echo "Upload complete: ${BINARY_NAME} published to ${REPO_OWNER}/${REPO_NAME}/releases/tag/${RELEASE_TAG}"
+
+elif [[ ${DEPLOY_METHOD} == "ssh" ]]; then
+	# Legacy SSH/rsync deployment
+	echo "Using SSH deployment..."
+
+	if [[ -z ${DEPLOY_USER} ]] || [[ -z ${DEPLOY_HOST} ]] || [[ -z ${DEPLOY_PATH} ]]; then
+		echo "Error: DEPLOY_USER, DEPLOY_HOST, and DEPLOY_PATH must be configured"
+		exit 1
+	fi
+
+	echo "Creating deployment directory..."
+	if ssh "${DEPLOY_USER}@${DEPLOY_HOST}" 'mkdir -p -- "$DEPLOY_PATH"' &&
+		ssh "${DEPLOY_USER}@${DEPLOY_HOST}" 'test -d -- "$DEPLOY_PATH"'; then
+		:
+	else
+		echo "Error: Failed to create deployment directory on remote device"
+		exit 1
+	fi
+
+	rsync -av --progress "${ARTIFACT_PATH}" "${DEPLOY_USER}@${DEPLOY_HOST}:'${DEPLOY_PATH}/'" || {
+		echo "SSH deployment failed"
+		exit 1
+	}
+
+	echo "Deployment complete: ${BINARY_NAME} deployed to ${DEPLOY_HOST}:${DEPLOY_PATH}"
+else
+	echo "Error: Unknown DEPLOY_METHOD '${DEPLOY_METHOD}'. Use 'github' or 'ssh'"
+	exit 1
+fi
+
 echo
 
-# 6. Cleanup
-echo "6. Cleaning up build directory..."
+# 6. Generate Manifest (GitHub deployment only)
+if [[ ${DEPLOY_METHOD} == "github" ]] && [[ ${GENERATE_MANIFEST:-false} == "true" ]]; then
+	echo "6. Generating manifest.json..."
+	if [[ -f "./generate-manifest.sh" ]]; then
+		export REPO_URL="https://github.com/${REPO_OWNER}/${REPO_NAME}"
+		export RELEASE_TAG="${RELEASE_TAG:-latest}"
+		# Generate manifest from BUILD_DIR where all artifacts are
+		./generate-manifest.sh manifest.json "${BUILD_DIR}"
+
+		# Upload manifest to release
+		if command -v gh &>/dev/null; then
+			gh release upload "${RELEASE_TAG}" manifest.json \
+				--repo "${REPO_OWNER}/${REPO_NAME}" \
+				--clobber
+		else
+			curl -sS -X POST \
+				-H "Authorization: token ${GITHUB_TOKEN}" \
+				-H "Content-Type: application/json" \
+				--data-binary "@manifest.json" \
+				"https://uploads.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/${RELEASE_ID}/assets?name=manifest.json"
+		fi
+
+		echo "Manifest uploaded successfully"
+	else
+		echo "Warning: generate-manifest.sh not found, skipping manifest generation"
+	fi
+	echo
+fi
+
+# 7. Cleanup
+echo "7. Cleaning up build directory..."
 rm -rf "${BUILD_DIR}"
 echo "Build directory removed"
 
