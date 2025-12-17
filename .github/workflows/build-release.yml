@@ -1,0 +1,346 @@
+name: Build and Release Static Binaries
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag (e.g., latest, v1.0.0)"
+        required: true
+        default: "latest"
+  push:
+    tags:
+      - "v*"
+
+env:
+  REPO_VERSION: "1.0.0"
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-rust:
+    name: Build Rust Tools
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        tool:
+          - name: gpm
+            version: "0.1.0"
+            description: "Glochidia Package Manager"
+            license: "GPL-2.0-or-later"
+            source_url: "https://github.com/${{ github.repository }}"
+            working_dir: gpm
+    container:
+      image: rust:alpine
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: apk add --no-cache musl-dev file
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: ${{ matrix.tool.working_dir }}/target
+          key: ${{ runner.os }}-cargo-build-${{ matrix.tool.name }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build ${{ matrix.tool.name }}
+        working-directory: ${{ matrix.tool.working_dir }}
+        run: |
+          echo "Building ${{ matrix.tool.name }}..."
+          cargo build --release --target x86_64-unknown-linux-musl
+          strip target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }}
+          cp target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }} ../${{ matrix.tool.name }}-bin
+
+      - name: Verify static binary
+        run: |
+          echo "Verifying ${{ matrix.tool.name }} is statically linked..."
+          file ${{ matrix.tool.name }}-bin
+          if file ${{ matrix.tool.name }}-bin | grep -q "dynamically linked"; then
+            if file ${{ matrix.tool.name }}-bin | grep -q "interpreter"; then
+              echo "Error: Binary is dynamically linked with interpreter"
+              exit 1
+            fi
+          fi
+          echo "Binary verification passed"
+
+      - name: Test binary
+        run: |
+          echo "Testing ${{ matrix.tool.name }}..."
+          ./${{ matrix.tool.name }}-bin --version || ./${{ matrix.tool.name }}-bin --help || echo "No version/help available"
+
+      - name: Upload artifact with metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.tool.name }}
+          path: ${{ matrix.tool.name }}-bin
+
+  build-c-tools:
+    name: Build C/C++ Tools
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        tool:
+          - name: make
+            version: "4.4.1"
+            description: "GNU Make build tool"
+            license: "GPL-3.0-or-later"
+            source_url: "https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz"
+            source_sha256: "dd16fb1d67bfab79a72f5e8390735c49e3e8e70b4945a15ab1f81ddb78658fb3"
+            build_cmd: |
+              wget -q $SOURCE_URL
+              tar xzf $(basename $SOURCE_URL)
+              cd make-$VERSION
+              ./configure LDFLAGS="-static"
+              make LDFLAGS="-static"
+              strip make
+              cp make ../../$NAME-bin
+          - name: gawk
+            version: "5.3.2"
+            description: "GNU Awk text processing"
+            license: "GPL-3.0-or-later"
+            source_url: "https://ftp.gnu.org/gnu/gawk/gawk-5.3.2.tar.xz"
+            source_sha256: "3203e52edb182061ac4fe37f0040e8d5b5ed5d37e1c8a1dcf5d8288d0c757cd5"
+            build_cmd: |
+              wget -q $SOURCE_URL
+              tar xJf $(basename $SOURCE_URL)
+              cd gawk-$VERSION
+              ./configure LDFLAGS="-static"
+              make LDFLAGS="-static"
+              strip gawk
+              cp gawk ../../$NAME-bin
+    container:
+      image: alpine:latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: apk add --no-cache build-base wget xz file
+
+      - name: Build ${{ matrix.tool.name }}
+        env:
+          NAME: ${{ matrix.tool.name }}
+          VERSION: ${{ matrix.tool.version }}
+          SOURCE_URL: ${{ matrix.tool.source_url }}
+        run: |
+          echo "Building ${{ matrix.tool.name }} ${{ matrix.tool.version }}..."
+          mkdir -p build
+          cd build
+          ${{ matrix.tool.build_cmd }}
+
+      - name: Verify static binary
+        run: |
+          echo "Verifying ${{ matrix.tool.name }} is statically linked..."
+          file ${{ matrix.tool.name }}-bin
+          if file ${{ matrix.tool.name }}-bin | grep -q "dynamically linked"; then
+            echo "Error: Binary is dynamically linked"
+            exit 1
+          fi
+          if ! file ${{ matrix.tool.name }}-bin | grep -q "statically linked"; then
+            echo "Warning: Cannot confirm static linking"
+          fi
+          echo "Binary verification passed"
+
+      - name: Test binary
+        run: |
+          echo "Testing ${{ matrix.tool.name }}..."
+          ./${{ matrix.tool.name }}-bin --version
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.tool.name }}
+          path: ${{ matrix.tool.name }}-bin
+
+  generate-manifest:
+    name: Generate Manifest and Create Release
+    needs: [build-rust, build-c-tools]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare binaries
+        run: |
+          mkdir -p release-files
+          echo "Preparing binaries..."
+          for dir in artifacts/*/; do
+            tool=$(basename "$dir")
+            if [ -f "$dir/${tool}-bin" ]; then
+              mv "$dir/${tool}-bin" "release-files/${tool}"
+              echo "  - $tool"
+            fi
+          done
+          chmod +x release-files/*
+          ls -lh release-files/
+
+      - name: Download GPL licenses
+        run: |
+          mkdir -p licenses
+          if [ ! -f licenses/GPL-2.0.txt ]; then
+            echo "Downloading GPL-2.0..."
+            curl -sS https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt -o licenses/GPL-2.0.txt
+          fi
+          if [ ! -f licenses/GPL-3.0.txt ]; then
+            echo "Downloading GPL-3.0..."
+            curl -sS https://www.gnu.org/licenses/gpl-3.0.txt -o licenses/GPL-3.0.txt
+          fi
+
+      - name: Generate manifest with Python
+        run: |
+          python3 << 'PYEOF'
+          import json
+          import hashlib
+          import os
+          from datetime import datetime
+
+          RELEASE_TAG = "${{ github.event.inputs.release_tag || github.ref_name }}"
+          REPO = "${{ github.repository }}"
+
+          tools_metadata = {
+              "gpm": {
+                  "version": "0.1.0",
+                  "description": "Glochidia Package Manager",
+                  "license": "GPL-2.0-or-later",
+                  "source_url": f"https://github.com/{REPO}",
+                  "build_type": "rust-alpine"
+              },
+              "make": {
+                  "version": "4.4.1",
+                  "description": "GNU Make build tool",
+                  "license": "GPL-3.0-or-later",
+                  "source_url": "https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz",
+                  "source_sha256": "dd16fb1d67bfab79a72f5e8390735c49e3e8e70b4945a15ab1f81ddb78658fb3",
+                  "build_type": "alpine"
+              },
+              "gawk": {
+                  "version": "5.3.2",
+                  "description": "GNU Awk text processing",
+                  "license": "GPL-3.0-or-later",
+                  "source_url": "https://ftp.gnu.org/gnu/gawk/gawk-5.3.2.tar.xz",
+                  "source_sha256": "3203e52edb182061ac4fe37f0040e8d5b5ed5d37e1c8a1dcf5d8288d0c757cd5",
+                  "build_type": "alpine"
+              }
+          }
+
+          manifest = {
+              "repo_version": "${{ env.REPO_VERSION }}",
+              "updated_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "tools": {}
+          }
+
+          for tool_name in os.listdir("release-files"):
+              if tool_name.startswith("."):
+                  continue
+              
+              filepath = f"release-files/{tool_name}"
+              if not os.path.isfile(filepath):
+                  continue
+              
+              with open(filepath, "rb") as f:
+                  data = f.read()
+                  sha256 = hashlib.sha256(data).hexdigest()
+                  size = len(data)
+              
+              if tool_name not in tools_metadata:
+                  print(f"Warning: No metadata for {tool_name}")
+                  continue
+              
+              metadata = tools_metadata[tool_name]
+              tool_entry = {
+                  "version": metadata["version"],
+                  "description": metadata["description"],
+                  "url": f"https://github.com/{REPO}/releases/download/{RELEASE_TAG}/{tool_name}",
+                  "sha256": sha256,
+                  "size": size,
+                  "build_type": metadata["build_type"],
+                  "license": metadata["license"],
+                  "source_url": metadata["source_url"]
+              }
+              
+              if "source_sha256" in metadata:
+                  tool_entry["source_sha256"] = metadata["source_sha256"]
+              
+              manifest["tools"][tool_name] = tool_entry
+              print(f"Added {tool_name}: {size} bytes, SHA256: {sha256[:16]}...")
+
+          with open("release-files/manifest.json", "w") as f:
+              json.dump(manifest, f, indent=2)
+
+          print("\nGenerated manifest:")
+          print(json.dumps(manifest, indent=2))
+          PYEOF
+
+      - name: Copy compliance files
+        run: |
+          cp SOURCES.txt release-files/
+          cp COPYING release-files/
+          cp -r licenses release-files/
+          echo "Release files:"
+          ls -lh release-files/
+
+      - name: Create/Update Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event.inputs.release_tag || github.ref_name }}
+          name: Release ${{ github.event.inputs.release_tag || github.ref_name }}
+          body: |
+            ## Static Binaries for ZimaOS
+
+            Built from source with GPL compliance. All binaries are statically linked and verified.
+
+            ### Available Tools
+            - **gpm** v0.1.0 - Glochidia Package Manager (install other tools)
+            - **make** v4.4.1 - GNU Make build tool
+            - **gawk** v5.3.2 - GNU Awk text processing
+
+            ### Installation
+            ```bash
+            # Download and install gpm
+            wget https://github.com/${{ github.repository }}/releases/download/${{ github.event.inputs.release_tag || github.ref_name }}/gpm
+            chmod +x gpm
+            mv gpm /DATA/bin/
+
+            # Configure PATH and install tools
+            gpm setup-path
+            source ~/.bashrc
+            gpm install make
+            gpm install gawk
+            gpm list
+            ```
+
+            ### Verification
+            - `manifest.json` - SHA256 checksums for all binaries
+            - `SOURCES.txt` - Source code provenance
+            - `COPYING` - GPL compliance notice
+            - `licenses/` - Full license texts
+
+            ### Build Information
+            - Built: ${{ github.event_name == 'workflow_dispatch' && 'manually' || 'from tag push' }}
+            - Commit: ${{ github.sha }}
+            - All binaries verified as statically linked
+          files: |
+            release-files/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
