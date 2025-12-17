@@ -14,8 +14,9 @@ echo "--- Patching Source Files in ${SOURCE_DIR} for musl/C99 compatibility ---"
 # This line conflicts with the modern declaration in stdlib.h.
 echo "  -> Applying patch for getenv()."
 while IFS= read -r -d $'\0' file; do
-	# Use sed to delete the line, adding the '//' prefix to handle a potential stray line if it exists
-	sed -i '/extern char \*getenv ();/d' "${file}"
+	echo "     Processing ${file}"
+	# Use multiple sed patterns to handle variations in whitespace
+	sed -i '/extern[[:space:]]*char[[:space:]]*\*[[:space:]]*getenv[[:space:]]*([[:space:]]*)/d' "${file}"
 	echo "     Patched ${file}"
 
 	# For getopt.c, we need to explicitly add stdlib.h and unistd.h headers
