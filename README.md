@@ -1,187 +1,246 @@
 # Glochidia
 
-Universal native build and deployment tool for building projects targeting x86_64 embedded Linux systems with musl.
+**Static Binary Library for ZimaOS** - A curated collection of statically-compiled development tools and utilities for musl-based embedded Linux systems.
 
-## Overview
+[![License: GPL](https://img.shields.io/badge/License-GPL-blue.svg)](COPYING)
+[![Build Status](https://img.shields.io/badge/build-automated-brightgreen.svg)](https://github.com/uairhahs/glochidia/actions)
 
-This repository provides a streamlined pipeline to:
+## What is Glochidia?
 
-- Clone any git repository or download tarballs
-- Auto-detect or specify build systems (Makefile, CMake, custom build scripts)
-- Build natively in Alpine Linux containers with musl for maximum compatibility
-- Deploy compiled binaries to remote devices via SSH/rsync
+Glochidia provides instantly-usable static binaries of essential development tools (Make, Git, Nano, etc.) for ZimaOS and similar systems where traditional package managers are unavailable or restricted. Instead of running heavy Docker containers or dealing with complex dependencies, users get:
+
+✓ **Instant execution** - No installation, just download and run  
+✓ **Zero dependencies** - Statically linked with musl libc  
+✓ **Tiny size** - Individual binaries (2-15MB each)  
+✓ **Seamless integration** - Works alongside system tools  
+✓ **Auto-updates** - Managed via the `gpm` package manager
+
+### Why "Glochidia"?
+
+A glochidium is a larval stage of freshwater mussels that attaches to a host temporarily before maturing. Similarly, this project provides tools that integrate into your system temporarily (or permanently) without invasive modifications.
+
+## Quick Start
+
+### For End Users (ZimaOS)
+
+Install the ZimaOS Terminal app (includes `gpm`):
+
+```bash
+zpkg install zimaos_terminal
+```
+
+Then install tools on-demand:
+
+```bash
+gpm install make    # GNU Make
+gpm install git     # Git VCS
+gpm install nano    # Text editor
+gpm list-remote     # See all available tools
+```
+
+### For Developers
+
+Build and deploy binaries from source:
+
+```bash
+# Set deployment target
+export DEPLOY_METHOD=github
+export GITHUB_TOKEN=your_token_here
+export GENERATE_MANIFEST=true
+
+# Build a tool
+REPO_URL=https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz \
+BINARY_NAME=make \
+./grow_glochidium.sh
+```
+
+## Architecture
+
+This project consists of three components:
+
+1. **Build System** ([grow_glochidium.sh](grow_glochidium.sh)) - Automated compilation pipeline
+2. **Binary Distribution** (GitHub Releases) - Versioned artifacts with manifest.json
+3. **Package Manager** (`gpm`) - Client-side tool for installation and updates
 
 ## Prerequisites
 
-### Required Tools
+### For End Users
 
-- **podman** - For containerized native Alpine builds
-- **git** - For cloning repositories
-- **bash** - For pipeline execution
-- **rsync** - For binary deployment via SSH
-- **ssh** - For remote device access
-- **ssh-copy-id** - For setting up SSH key authentication
+- ZimaOS or compatible musl-based Linux system
+- `/DATA` directory with write permissions (standard on ZimaOS)
+- Internet connection for downloading binaries
 
-### SSH Setup (Required)
+### For Developers (Building from Source)
 
-Before using the deployment pipeline, set up SSH key authentication:
+**Required:**
+
+- **podman** or **docker** - For containerized builds
+- **git** - For repository operations
+- **bash** 4.0+ - For build scripts
+- **GitHub CLI** (`gh`) or **curl** - For release uploads
+
+**Optional:**
+
+- **jq** - For JSON manipulation in manifest generation
+
+### Deployment Methods
+
+The build system supports two deployment targets:
+
+1. **GitHub Releases** (default, recommended)
+
+   ```bash
+   export DEPLOY_METHOD=github
+   export GITHUB_TOKEN=your_personal_access_token
+   export REPO_OWNER=uairhahs
+   export REPO_NAME=glochidia
+   ```
+
+2. **SSH/rsync** (legacy)
+   ```bash
+   export DEPLOY_METHOD=ssh
+   export DEPLOY_USER=username
+   export DEPLOY_HOST=device.ip
+   export DEPLOY_PATH=/path/on/device
+   ```
+
+### Build Environments
+
+The system uses Alpine Linux (musl) for all projects:
+
+- **Alpine Linux** (musl) - Static compilation for C/C++ and Rust projects
+
+## Building From Source
+
+### Basic Usage
 
 ```bash
-ssh-copy-id -i ~/.ssh/id_rsa.pub username@device.ip.or.hostname
+./grow_glochidium.sh
 ```
 
-If you don't have SSH keys, generate them first:
+The script accepts environment variables for configuration:
+
+| Variable            | Description                   | Default    | Required              |
+| ------------------- | ----------------------------- | ---------- | --------------------- |
+| `REPO_URL`          | Source code URL (git/tarball) | (prompted) | Yes                   |
+| `BINARY_NAME`       | Output binary filename        | (prompted) | Yes                   |
+| `DEPLOY_METHOD`     | Deployment target             | `github`   | No                    |
+| `GITHUB_TOKEN`      | GitHub API token              | -          | For GitHub deployment |
+| `GENERATE_MANIFEST` | Auto-generate manifest        | `false`    | No                    |
+
+### Examples
+
+**Build GNU Make:**
 
 ```bash
-ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N ""
+REPO_URL=https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz \
+BINARY_NAME=make \
+DEPLOY_METHOD=github \
+GITHUB_TOKEN=$GITHUB_TOKEN \
+./grow_glochidium.sh
 ```
 
-Then copy the public key to your target device.
+**Build Git:**
 
-### Optional
+```bash
+REPO_URL=https://www.kernel.org/pub/software/scm/git/git-2.43.0.tar.xz \
+BINARY_NAME=git \
+./grow_glochidium.sh
+```
 
-- **cmake** - Already available in Alpine containers
-- **make** - Already available in Alpine containers
-- **cargo** - Already available in Alpine containers for Rust projects
-
-### Container Images
-
-The build system automatically selects the appropriate container:
-
-- `alpine:latest` - For C/C++ projects (autoconf, cmake, make) - native musl static linking
-- `debian:bookworm-slim` - For Rust/cargo projects - gnu host cross-compiles to musl target for static binaries
-
-## Usage
-
-### Enter repo and set execute
+**Build Rust project (gpm):**
 
 ```bash
 cd glochidia
-chmod +x grow_glochidium.sh
-```
-
-### Quick Start (git repo or tarball)
-
-```bash
-grow_glochidium.sh <source_url> <binary_name>
-```
-
-The script will:
-
-1. Prompt for deployment credentials (DEPLOY_USER, DEPLOY_HOST, DEPLOY_PATH)
-2. Clone the repository
-3. Auto-detect the build system
-4. Build natively in Alpine Linux container
-5. Deploy to target device
-
-**Example (git):**
-
-```bash
-grow_glochidium.sh https://github.com/fastfetch-cli/fastfetch fastfetch
-```
-
-**Example (tarball):**
-
-```bash
-grow_glochidium.sh https://ftp.gnu.org/gnu/gawk/gawk-5.3.1.tar.gz gawk
+podman run --rm -v "$(pwd)/gpm:/src:Z" -w /src rust:alpine sh -c '
+  apk add --no-cache musl-dev &&
+  cargo build --release --target x86_64-unknown-linux-musl &&
+  strip target/x86_64-unknown-linux-musl/release/gpm &&
+  cp target/x86_64-unknown-linux-musl/release/gpm /src/gpm-bin
+'
 ```
 
 ### Custom Build Commands
 
-For projects with non-standard build systems, provide a custom build command:
+For projects with non-standard build systems:
 
 ```bash
-grow_glochidium.sh <repo_url> <binary_name> "<build_command>"
+CUSTOM_BUILD_COMMAND="mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release .. && make" \
+./grow_glochidium.sh
 ```
-
-**Example with CMake:**
-
-```bash
-grow_glochidium.sh https://github.com/fastfetch-cli/fastfetch fastfetch \
-  "mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release .. && make"
-```
-
-### Environment Variables
-
-Set deployment credentials to skip prompts:
-
-```bash
-export DEPLOY_USER=username
-export DEPLOY_HOST=device.ip.or.hostname
-export DEPLOY_PATH=/path/to/deploy
-grow_glochidium.sh <repo_url> <binary_name>
-```
-
-Or set inline:
-
-```bash
-DEPLOY_USER=user DEPLOY_HOST=<ssh_target> DEPLOY_PATH=<destination_path> \
-  grow_glochidium.sh https://github.com/user/project binary_name
-```
-
-- Note: assure that the DEPLOY_PATH is added to your $PATH on the ssh target to use the binaries globally
-
-## Building Projects with Glochidia
-
-All builds happen natively in Alpine Linux containers for maximum compatibility.
-
-### Alpine Container Includes
-
-- **build-base** - GCC, Make, binutils, musl-dev
-- **autoconf, automake** - For autotools projects
-- **git, curl, wget** - For fetching dependencies
-- **libtool, pkgconfig** - For complex projects
-
-### Pre-Build Fixes
-
-The pipeline automatically applies compatibility fixes for common musl/Alpine issues:
-
-- Fixes `getenv()` and `getopt()` declarations in sources like fnmatch.c and getopt.c/h
-- Ensures proper header resolution for projects with complex directory structures
-- Strips binaries for smaller deployment size
 
 ## How It Works
 
-### Build System Auto-Detection
-
-The `grow_glochidium.sh` script automatically detects:
-
-- **Makefile** - Runs `make -j$(nproc)`
-- **build.sh** - Runs `bash build.sh`
-- **CMakeLists.txt** - Runs `mkdir -p build && cd build && cmake .. && make -j$(nproc)`
-
-For unsupported build systems, provide a custom build command as the 3rd parameter.
-
-### Native Alpine Build Pipeline
+### Build Pipeline
 
 1. **Download Source** - Clones git repo or extracts tarball
-2. **Create Build Container** - Spins up Alpine container with build-base
-3. **Apply Compatibility Fixes** - Patches known musl/Alpine issues (getenv, getopt declarations)
-4. **Compile** - Builds natively in Alpine with musl libc
-5. **Strip Binary** - Removes debug symbols for smaller size
-6. **Extract Artifact** - Copies binary from container to host
-7. **Binary Verification** - Confirms static ELF binary
-8. **Create Remote Directory** - Ensures deployment path exists on target device
-9. **Deploy via rsync** - Transfers binary over SSH
-10. **Cleanup** - Removes temporary build directory
+2. **Container Selection** - Alpine (C/C++) or Debian (Rust)
+3. **Compatibility Fixes** - Patches known musl issues (getenv, getopt, etc.)
+4. **Compilation** - Builds statically with `-static` LDFLAGS
+5. **Artifact Extraction** - Copies binary from container
+6. **Verification** - Confirms static ELF linking
+7. **Deployment** - Uploads to GitHub Releases or SSH target
+8. **Manifest Generation** - Updates manifest.json with checksums
 
-### Deployment
+### Auto-Detection
 
-The deployment script performs:
+The script automatically detects:
 
-1. **Remote Directory Creation**
-   - Creates deployment directory on target device via SSH (mkdir -p)
-   - Handles nested paths automatically
+- **Makefile** → `./configure && make LDFLAGS="-static"`
+- **CMakeLists.txt** → `cmake -DCMAKE_EXE_LINKER_FLAGS="-static" && make`
+- **build.sh** → Executes custom script
 
-2. **Binary Transfer**
-   - Uses rsync to deploy binary over SSH
-   - Efficient incremental transfers
-   - Progress reporting
+Note: Rust projects (like gpm) use the Alpine rust container separately.
 
-### Examples
+### Distribution
 
-Clone and build fastfetch, deploy to embedded device:
-e.g.
+Built binaries are published to:
+
+- **GitHub Releases** - `https://github.com/uairhahs/glochidia/releases/tag/latest`
+- **manifest.json** - Metadata with SHA256 checksums for verification
+
+## License & Compliance
+
+### This Repository
+
+Build scripts and infrastructure are licensed under GPL-3.0-or-later. See [COPYING](COPYING) for details.
+
+### Distributed Binaries
+
+Each binary is distributed under its original license:
+
+- **GNU Make** - GPL-3.0-or-later
+- **Git** - GPL-2.0-only
+- **GNU Nano** - GPL-3.0-or-later
+
+### GPL Compliance
+
+This project complies with GPL requirements by:
+
+✓ **Source Availability** - All source URLs documented in [SOURCES.txt](SOURCES.txt)  
+✓ **License Distribution** - Full texts in [licenses/](licenses/) directory  
+✓ **Build Reproducibility** - Complete build scripts in this repository  
+✓ **No Additional Restrictions** - Original GPL terms preserved
+
+For details, see [COPYING](COPYING) and [SOURCES.txt](SOURCES.txt).
+
+## Contributing
+
+Contributions are welcome! To add a new tool:
+
+1. Test the build locally using `grow_glochidium.sh`
+2. Update [SOURCES.txt](SOURCES.txt) with source provenance
+3. Submit a pull request with build instructions
+
+## Support
+
+- **Issues**: https://github.com/uairhahs/glochidia/issues
+- **Discussions**: https://github.com/uairhahs/glochidia/discussions
+- **License Questions**: See [COPYING](COPYING)
+
+---
+
+**Note**: Glochidia is independent of ZimaOS and is not officially affiliated with IceWhale Technology.
 
 ```bash
 grow_glochidium.sh https://github.com/fastfetch-cli/fastfetch fastfetch

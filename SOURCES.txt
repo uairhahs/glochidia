@@ -1,0 +1,64 @@
+# Source Code Provenance
+
+This file documents the original source code used to compile the static binaries distributed by this project.
+
+## Format
+Each line follows the format:
+```
+TOOL_NAME | VERSION | LICENSE | SOURCE_URL | SOURCE_SHA256 | STATUS
+```
+
+## Sources (Tested & Verified)
+
+GNU Make | 4.4.1 | GPL-3.0-or-later | https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz | dd16fb1d67bfab79a72f5e8390735c49e3e8e70b4945a15ab1f81ddb78658fb3 | ✅
+
+GNU Gawk | 5.3.2 | GPL-3.0-or-later | https://ftp.gnu.org/gnu/gawk/gawk-5.3.2.tar.xz | 3203e52edb182061ac4fe37f0040e8d5b5ed5d37e1c8a1dcf5d8288d0c757cd5 | ✅
+
+Microsoft Edit | 1.2.1 | MIT | https://github.com/microsoft/edit | (git commit hash varies) | ✅
+
+ble.sh | 0.4.0-devel | BSD-3-Clause | https://github.com/akinomyoga/ble.sh | (git commit hash varies) | ✅
+
+Starship | 1.24.1 | ISC | https://github.com/starship/starship | (git commit hash varies) | ✅
+
+Fastfetch | 2.56.1-66 | MIT | https://github.com/fastfetch-cli/fastfetch | (git commit hash varies) | ✅
+
+## Sources (Planned)
+
+Git | 2.43.0 | GPL-2.0-only | https://www.kernel.org/pub/software/scm/git/git-2.43.0.tar.xz | 5446603e73d911781d259e565750dcd277a42836c8e392cac91cf137aa9b76ec | 📋
+
+GNU Nano | 7.2 | GPL-3.0-or-later | https://www.nano-editor.org/dist/v7/nano-7.2.tar.xz | 86f3442768bd2873cec693f83cdf80b4b444ad3cc14760b74361474fc87a4526 | 📋
+
+---
+
+## Build Instructions
+
+All binaries are compiled statically from the above sources using the build scripts in this repository:
+- Alpine Linux (musl libc) for C/C++ programs: See alpine-build.sh
+- Debian with musl target for Rust programs: See debian-build.sh
+
+The complete build process is automated in grow_glochidium.sh and can be reproduced using:
+```bash
+REPO_URL=<source_url> BINARY_NAME=<tool_name> ./grow_glochidium.sh
+```
+
+## License Compliance
+
+Full license texts are available in the licenses/ directory:
+- GPL-2.0.txt - GNU General Public License version 2
+- GPL-3.0.txt - GNU General Public License version 3
+
+## Redistribution Rights
+
+All tools listed here are free software under GPL licenses. This project:
+1. Provides complete source code information (this file)
+2. Includes full license texts (licenses/ directory)
+3. Makes build scripts publicly available (this repository)
+4. Does not add additional restrictions beyond the original licenses
+
+Users receiving binaries from this project have the right to:
+- Use the software for any purpose
+- Study and modify the source code
+- Redistribute copies (with or without modifications)
+- Access the complete corresponding source code
+
+For questions about licensing or to request source code, please open an issue on this repository.
