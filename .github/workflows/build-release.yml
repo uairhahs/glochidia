@@ -41,6 +41,11 @@ jobs:
       - name: Install build dependencies
         run: apk add --no-cache musl-dev file
 
+      - name: Prepare cache directories
+        run: |
+          mkdir -p ~/.cargo/registry ~/.cargo/git
+          mkdir -p ${{ matrix.tool.working_dir }}/target
+
       - name: Cache cargo registry
         uses: actions/cache@v4
         with:
