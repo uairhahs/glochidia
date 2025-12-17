@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Glochidia Manifest Schema",
+  "description": "Manifest for static binary distribution on ZimaOS",
+  "type": "object",
+  "required": ["repo_version", "updated_at", "tools"],
+  "properties": {
+    "repo_version": {
+      "type": "string",
+      "description": "Version of the manifest schema",
+      "example": "1.0.0"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO8601 timestamp of manifest generation"
+    },
+    "tools": {
+      "type": "object",
+      "description": "Map of tool name to tool metadata",
+      "patternProperties": {
+        "^[a-z0-9-]+$": {
+          "type": "object",
+          "required": ["version", "url", "sha256", "license"],
+          "properties": {
+            "version": {
+              "type": "string",
+              "description": "Version of the tool"
+            },
+            "description": {
+              "type": "string",
+              "description": "Human-readable description"
+            },
+            "url": {
+              "type": "string",
+              "format": "uri",
+              "description": "Download URL for the binary"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$",
+              "description": "SHA256 checksum of the binary"
+            },
+            "size": {
+              "type": "integer",
+              "description": "File size in bytes"
+            },
+            "build_type": {
+              "type": "string",
+              "enum": ["alpine", "debian-musl"],
+              "description": "Build environment used"
+            },
+            "license": {
+              "type": "string",
+              "description": "SPDX license identifier"
+            },
+            "source_url": {
+              "type": "string",
+              "format": "uri",
+              "description": "URL to original source code"
+            },
+            "source_sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$",
+              "description": "SHA256 checksum of source tarball"
+            }
+          }
+        }
+      }
+    }
+  }
+}

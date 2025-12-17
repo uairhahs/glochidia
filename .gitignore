@@ -28,3 +28,6 @@ build/
 
 # Trunk generated outputs
 .trunk/out/
+
+# Local testing files
+.local

@@ -1,6 +1,6 @@
 #!/bin/sh
 # Alpine build script for C/C++ projects (autoconf, make, cmake)
-# For Rust/cargo projects, grow_glochidium.sh uses debian-build.sh instead
+# Note: Rust projects use rust:alpine container directly, not this script
 set -e
 cd /src
 
