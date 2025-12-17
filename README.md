@@ -234,8 +234,8 @@ Contributions are welcome! To add a new tool:
 
 ## Support
 
-- **Issues**: https://github.com/uairhahs/glochidia/issues
-- **Discussions**: https://github.com/uairhahs/glochidia/discussions
+- **Issues**: <https://github.com/uairhahs/glochidia/issues>
+- **Discussions**: <https://github.com/uairhahs/glochidia/discussions>
 - **License Questions**: See [COPYING](COPYING)
 
 ---
@@ -401,7 +401,7 @@ ldd <binary_name>
 - Ensure DEPLOY_PATH exists or is writable on remote device
 - For buildroot systems, ensure /DATA/bin exists and is in $PATH
 
-## Contributing
+## Development Guidelines
 
 Changes should:
 
