@@ -12,7 +12,7 @@ RELEASE_TAG="${RELEASE_TAG:-latest}"
 cat >"${MANIFEST_FILE}" <<EOF
 {
   "repo_version": "${REPO_VERSION}",
-  "updated_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+  "updated_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ" || true)",
   "tools": {
 EOF
 
@@ -58,7 +58,7 @@ add_tool() {
       "source_url": "${source_url}"$(if [[ -n ${source_sha256} ]]; then
 		echo ","
 		echo "      \"source_sha256\": \"${source_sha256}\""
-	fi)
+	fi || true)
     }
 EOF
 }
