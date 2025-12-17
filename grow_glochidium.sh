@@ -231,7 +231,7 @@ if [[ ${DEPLOY_METHOD} == "github" ]]; then
 		# Get release ID
 		RELEASE_ID=$(curl -sS -H "Authorization: token ${GITHUB_TOKEN}" \
 			"https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/tags/${RELEASE_TAG}" |
-			grep '"id":' | head -n 1 | sed 's/[^0-9]*//g')
+			grep '"id":' | head -n 1 | sed 's/[^0-9]*//g' || true)
 
 		if [[ -z ${RELEASE_ID} ]]; then
 			echo "Error: Could not find release with tag '${RELEASE_TAG}'"
