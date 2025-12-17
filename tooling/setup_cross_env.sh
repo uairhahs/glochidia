@@ -23,8 +23,8 @@ while IFS= read -r -d $'\0' file; do
 	if [[ ${file} == *getopt.c ]]; then
 		# Check if the header is already present to avoid duplicates
 		if ! grep -q '#include <stdlib.h>' "${file}"; then
-			# Add stdlib.h at the top after first #include
-			sed -i '0,/^#[[:space:]]*include/a #include <stdlib.h>\n#include <unistd.h>' "${file}"
+			# Add headers after the config.h include (standard pattern)
+			sed -i '/#include.*config\.h/a #include <stdlib.h>\n#include <unistd.h>' "${file}"
 			echo "     Added standard headers to ${file}"
 		fi
 	fi
