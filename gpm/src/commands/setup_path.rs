@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use std::env;
-use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::fs;
 use std::path::PathBuf;
 
 use crate::config::Config;
@@ -35,8 +34,8 @@ pub fn run(config: &Config) -> Result<()> {
         }
 
         let file_name = config_file.file_name().unwrap().to_string_lossy();
-        let content = fs::read_to_string(&config_file)
-            .context(format!("Failed to read {}", file_name))?;
+        let content =
+            fs::read_to_string(&config_file).context(format!("Failed to read {}", file_name))?;
 
         // Check if already configured
         if content.contains(&install_dir.to_string()) || content.contains(&marker_comment) {
@@ -44,15 +43,16 @@ pub fn run(config: &Config) -> Result<()> {
             continue;
         }
 
-        // Append PATH configuration
-        let mut file = OpenOptions::new()
-            .append(true)
-            .open(&config_file)
-            .context(format!("Failed to open {} for writing", file_name))?;
+        // Prepend PATH configuration at the top
+        let new_content = format!(
+            "{marker_comment}\n{path_export}\n\n{content}",
+            marker_comment = marker_comment,
+            path_export = path_export,
+            content = content
+        );
 
-        writeln!(file)?;
-        writeln!(file, "{}", marker_comment)?;
-        writeln!(file, "{}", path_export)?;
+        fs::write(&config_file, new_content)
+            .context(format!("Failed to write to {}", file_name))?;
 
         modified_files.push(file_name.to_string());
     }

@@ -27,19 +27,28 @@ jobs:
       matrix:
         tool:
           - name: gpm
-            version: "0.1.0"
             description: "Glochidia Package Manager"
             license: "GPL-2.0-or-later"
             source_url: "https://github.com/${{ github.repository }}"
             working_dir: gpm
           - name: starship
-            version: "1.24.1"
             description: "Cross-shell prompt"
             license: "ISC"
             source_url: "https://github.com/starship/starship"
             repo_url: "https://github.com/starship/starship"
-            git_ref: "v1.24.1"
             build_cmd: "cargo build --release --target x86_64-unknown-linux-musl --no-default-features --features battery"
+          - name: msedit
+            description: "Text editor for terminals"
+            license: "MIT"
+            source_url: "https://github.com/microsoft/edit"
+            repo_url: "https://github.com/microsoft/edit"
+            binary_name: "edit"
+            build_cmd: "export RUSTC_BOOTSTRAP=1 && cargo build --release --target x86_64-unknown-linux-musl"
+          - name: set_locale
+            description: "Locale setting utility"
+            license: "GPL-2.0-or-later"
+            source_url: "https://github.com/${{ github.repository }}"
+            working_dir: set_locale
 
     container:
       image: rust:alpine
@@ -112,20 +121,21 @@ jobs:
             cd ${BUILD_DIR}
             eval "${{ matrix.tool.build_cmd }}"
             # Find and copy binary back to workspace
-            if [ -f "target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }}" ]; then
-              strip target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }}
+            BINARY_NAME="${{ matrix.tool.binary_name || matrix.tool.name }}"
+            if [ -f "target/x86_64-unknown-linux-musl/release/${BINARY_NAME}" ]; then
+              strip target/x86_64-unknown-linux-musl/release/${BINARY_NAME}
               # Extract version from built binary
-              VERSION_OUTPUT=$(target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }} --version 2>&1 || echo "unknown")
+              VERSION_OUTPUT=$(target/x86_64-unknown-linux-musl/release/${BINARY_NAME} --version 2>&1 || echo "unknown")
               VERSION=$(echo "$VERSION_OUTPUT" | grep -oP '\d+\.\d+\.\d+' | head -n1 || echo "${{ steps.fetch-version.outputs.version }}")
               echo "$VERSION" > "${WORKSPACE_DIR}/${{ matrix.tool.name }}.version.tmp"
-              cp target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }} "${WORKSPACE_DIR}/${{ matrix.tool.name }}-bin"
-            elif [ -f "build/${{ matrix.tool.name }}" ]; then
-              strip build/${{ matrix.tool.name }}
+              cp target/x86_64-unknown-linux-musl/release/${BINARY_NAME} "${WORKSPACE_DIR}/${{ matrix.tool.name }}-bin"
+            elif [ -f "build/${BINARY_NAME}" ]; then
+              strip build/${BINARY_NAME}
               # Extract version from built binary
-              VERSION_OUTPUT=$(build/${{ matrix.tool.name }} --version 2>&1 || echo "unknown")
+              VERSION_OUTPUT=$(build/${BINARY_NAME} --version 2>&1 || echo "unknown")
               VERSION=$(echo "$VERSION_OUTPUT" | grep -oP '\d+\.\d+\.\d+' | head -n1 || echo "${{ steps.fetch-version.outputs.version }}")
               echo "$VERSION" > "${WORKSPACE_DIR}/${{ matrix.tool.name }}.version.tmp"
-              cp build/${{ matrix.tool.name }} "${WORKSPACE_DIR}/${{ matrix.tool.name }}-bin"
+              cp build/${BINARY_NAME} "${WORKSPACE_DIR}/${{ matrix.tool.name }}-bin"
             fi
           fi
 
@@ -172,32 +182,26 @@ jobs:
       matrix:
         tool:
           - name: make
-            version: "4.4.1"
             description: "GNU Make build tool"
             license: "GPL-3.0-or-later"
             source_url: "https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz"
             source_sha256: "dd16fb1d67bfab79a72f5e8390735c49e3e8e70b4945a15ab1f81ddb78658fb3"
             build_cmd: "./configure LDFLAGS=-static && make -j$(nproc)"
           - name: gawk
-            version: "5.3.2"
             description: "GNU Awk text processing"
             license: "GPL-3.0-or-later"
             source_url: "https://ftp.gnu.org/gnu/gawk/gawk-5.3.2.tar.xz"
             source_sha256: "3203e52edb182061ac4fe37f0040e8d5b5ed5d37e1c8a1dcf5d8288d0c757cd5"
             build_cmd: "./configure LDFLAGS=-static && make -j$(nproc)"
           - name: ble.sh
-            version: "0.4.0"
             description: "Bash Line Editor"
             license: "BSD-3-Clause"
             source_url: "https://github.com/akinomyoga/ble.sh"
-            git_ref: "v0.4.0-devel3"
             build_cmd: "make"
           - name: fastfetch
-            version: "2.30.2"
             description: "System information tool"
             license: "MIT"
             source_url: "https://github.com/fastfetch-cli/fastfetch"
-            git_ref: "2.30.2"
             build_cmd: "cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXE_LINKER_FLAGS=-static -DENABLE_SYSTEM_YYJSON=OFF -DENABLE_DIRECTWRITE=OFF -DENABLE_XRANDR=OFF -DENABLE_X11=OFF -DENABLE_WAYLAND=OFF -DENABLE_GIO=OFF -DENABLE_DCONF=OFF -DENABLE_DBUS=OFF -DENABLE_XFCONF=OFF -DENABLE_SQLITE3=OFF -DENABLE_IMAGEMAGICK=OFF -DENABLE_CHAFA=OFF -DENABLE_ZLIB=OFF -DENABLE_EGL=OFF -DENABLE_GLX=OFF -DENABLE_OSMESA=OFF -DENABLE_OPENCL=OFF -DENABLE_VULKAN=OFF -DENABLE_RPM=OFF -DENABLE_DRM=OFF -DENABLE_FREETYPE=OFF && cmake --build build --target fastfetch"
     steps:
       - name: Checkout code
@@ -422,6 +426,18 @@ jobs:
                   "license": "BSD-3-Clause",
                   "source_url": "https://github.com/akinomyoga/ble.sh",
                   "build_type": "script"
+              },
+              "msedit": {
+                  "description": "Text editor for terminals",
+                  "license": "MIT",
+                  "source_url": "https://github.com/microsoft/edit",
+                  "build_type": "rust-alpine"
+              },
+              "set_locale": {
+                  "description": "Locale setting utility",
+                  "license": "GPL-2.0-or-later",
+                  "source_url": f"https://github.com/{REPO}",
+                  "build_type": "rust-alpine"
               }
           }
 
