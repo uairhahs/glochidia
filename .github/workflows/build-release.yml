@@ -9,6 +9,8 @@ on:
         required: true
         default: "latest"
   push:
+    branches:
+      - master
     tags:
       - "v*"
 
