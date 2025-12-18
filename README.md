@@ -44,9 +44,10 @@ Build and deploy binaries from source:
 
 ```bash
 # Set deployment target
-export DEPLOY_METHOD=github
-export GITHUB_TOKEN=your_token_here
-export GENERATE_MANIFEST=true
+export DEPLOY_METHOD=ssh
+export DEPLOY_USER=username
+export DEPLOY_HOST=device.ip
+export DEPLOY_PATH=/path/on/device
 
 # Build a tool
 REPO_URL=https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz \
@@ -59,7 +60,7 @@ BINARY_NAME=make \
 This project consists of three components:
 
 1. **Build System** ([grow_glochidium.sh](grow_glochidium.sh)) - Automated compilation pipeline
-2. **Binary Distribution** (GitHub Releases) - Versioned artifacts with manifest.json
+2. **Binary Distribution** (CI/CD workflow) - Automated builds via GitHub Actions
 3. **Package Manager** (`gpm`) - Client-side tool for installation and updates
 
 ## Prerequisites
@@ -85,23 +86,28 @@ This project consists of three components:
 
 ### Deployment Methods
 
-The build system supports two deployment targets:
+The build system supports multiple deployment targets:
 
-1. **GitHub Releases** (default, recommended)
+1. **SSH/rsync** (default)
 
-   ```bash
-   export DEPLOY_METHOD=github
-   export GITHUB_TOKEN=your_personal_access_token
-   export REPO_OWNER=uairhahs
-   export REPO_NAME=glochidia
-   ```
-
-2. **SSH/rsync** (legacy)
    ```bash
    export DEPLOY_METHOD=ssh
    export DEPLOY_USER=username
    export DEPLOY_HOST=device.ip
    export DEPLOY_PATH=/path/on/device
+   ```
+
+2. **CI/CD** (for automated workflows)
+
+   ```bash
+   export DEPLOY_METHOD=ci-cd
+   # Artifact will be left in build directory for CI/CD to copy
+   ```
+
+3. **None** (skip deployment)
+   ```bash
+   export DEPLOY_METHOD=none
+   # Only build, don't deploy
    ```
 
 ### Build Environments
@@ -120,13 +126,14 @@ The system uses Alpine Linux (musl) for all projects:
 
 The script accepts environment variables for configuration:
 
-| Variable            | Description                   | Default    | Required              |
-| ------------------- | ----------------------------- | ---------- | --------------------- |
-| `REPO_URL`          | Source code URL (git/tarball) | (prompted) | Yes                   |
-| `BINARY_NAME`       | Output binary filename        | (prompted) | Yes                   |
-| `DEPLOY_METHOD`     | Deployment target             | `github`   | No                    |
-| `GITHUB_TOKEN`      | GitHub API token              | -          | For GitHub deployment |
-| `GENERATE_MANIFEST` | Auto-generate manifest        | `false`    | No                    |
+| Variable        | Description                   | Default    | Required           |
+| --------------- | ----------------------------- | ---------- | ------------------ |
+| `REPO_URL`      | Source code URL (git/tarball) | (prompted) | Yes                |
+| `BINARY_NAME`   | Output binary filename        | (prompted) | Yes                |
+| `DEPLOY_METHOD` | Deployment target             | `ssh`      | No                 |
+| `DEPLOY_USER`   | SSH username                  | -          | For SSH deployment |
+| `DEPLOY_HOST`   | SSH hostname/IP               | -          | For SSH deployment |
+| `DEPLOY_PATH`   | Deployment path on host       | -          | For SSH deployment |
 
 ### Examples
 
@@ -135,16 +142,19 @@ The script accepts environment variables for configuration:
 ```bash
 REPO_URL=https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz \
 BINARY_NAME=make \
-DEPLOY_METHOD=github \
-GITHUB_TOKEN=$GITHUB_TOKEN \
+DEPLOY_METHOD=ssh \
+DEPLOY_USER=user \
+DEPLOY_HOST=192.168.1.100 \
+DEPLOY_PATH=/DATA/bin \
 ./grow_glochidium.sh
 ```
 
-**Build Git:**
+**Build Git (CI/CD mode):**
 
 ```bash
 REPO_URL=https://www.kernel.org/pub/software/scm/git/git-2.43.0.tar.xz \
 BINARY_NAME=git \
+DEPLOY_METHOD=ci-cd \
 ./grow_glochidium.sh
 ```
 

@@ -9,6 +9,8 @@ on:
         required: true
         default: "latest"
   push:
+    branches:
+      - "test/**" # Remove after testing
     tags:
       - "v*"
 
@@ -53,7 +55,7 @@ jobs:
         run: apk add --no-cache tar
 
       - name: Install build dependencies
-        run: apk add --no-cache musl-dev file
+        run: apk add --no-cache musl-dev file git cmake
 
       - name: Prepare cache directories
         run: |
@@ -168,7 +170,7 @@ jobs:
 
           # Set up environment for grow_glochidium.sh
           export CONTAINER_RUNTIME=podman
-          export DEPLOY_METHOD=none
+          export DEPLOY_METHOD=ci-cd
           export DEPLOY_USER=ci
           export DEPLOY_HOST=localhost
           export DEPLOY_PATH=/tmp/ci

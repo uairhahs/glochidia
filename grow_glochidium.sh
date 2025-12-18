@@ -203,59 +203,9 @@ if [[ ${ARTIFACT_BASENAME} != "${BINARY_NAME}" ]]; then
 fi
 
 # Deployment method selection
-DEPLOY_METHOD="${DEPLOY_METHOD:-github}"
+DEPLOY_METHOD="${DEPLOY_METHOD:-ssh}"
 
-if [[ ${DEPLOY_METHOD} == "github" ]]; then
-	# GitHub Release deployment
-	echo "Publishing to GitHub Releases..."
-
-	if [[ -z ${GITHUB_TOKEN-} ]]; then
-		echo "Error: GITHUB_TOKEN must be set for GitHub deployment"
-		exit 1
-	fi
-
-	REPO_OWNER="${REPO_OWNER:-uairhahs}"
-	REPO_NAME="${REPO_NAME:-glochidia}"
-	RELEASE_TAG="${RELEASE_TAG:-latest}"
-
-	# Check if gh CLI is available
-	if command -v gh &>/dev/null; then
-		echo "Using GitHub CLI to upload ${BINARY_NAME}..."
-		gh release upload "${RELEASE_TAG}" "${ARTIFACT_PATH}" \
-			--repo "${REPO_OWNER}/${REPO_NAME}" \
-			--clobber || {
-			echo "GitHub CLI upload failed"
-			exit 1
-		}
-	else
-		# Fallback to curl with GitHub API
-		echo "Using GitHub API to upload ${BINARY_NAME}..."
-
-		# Get release ID
-		RELEASE_ID=$(curl -sS -H "Authorization: token ${GITHUB_TOKEN}" \
-			"https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/tags/${RELEASE_TAG}" |
-			grep '"id":' | head -n 1 | sed 's/[^0-9]*//g' || true)
-
-		if [[ -z ${RELEASE_ID} ]]; then
-			echo "Error: Could not find release with tag '${RELEASE_TAG}'"
-			exit 1
-		fi
-
-		# Upload asset
-		curl -sS -X POST \
-			-H "Authorization: token ${GITHUB_TOKEN}" \
-			-H "Content-Type: application/octet-stream" \
-			--data-binary "@${ARTIFACT_PATH}" \
-			"https://uploads.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/${RELEASE_ID}/assets?name=${BINARY_NAME}" ||
-			{
-				echo "GitHub API upload failed"
-				exit 1
-			}
-	fi
-
-	echo "Upload complete: ${BINARY_NAME} published to ${REPO_OWNER}/${REPO_NAME}/releases/tag/${RELEASE_TAG}"
-
-elif [[ ${DEPLOY_METHOD} == "ssh" ]]; then
+if [[ ${DEPLOY_METHOD} == "ssh" ]]; then
 	# Legacy SSH/rsync deployment
 	echo "Using SSH deployment..."
 
@@ -279,44 +229,18 @@ elif [[ ${DEPLOY_METHOD} == "ssh" ]]; then
 	}
 
 	echo "Deployment complete: ${BINARY_NAME} deployed to ${DEPLOY_HOST}:${DEPLOY_PATH}"
+elif [[ ${DEPLOY_METHOD} == "ci-cd" ]] || [[ ${DEPLOY_METHOD} == "none" ]]; then
+	echo "Skipping deployment (DEPLOY_METHOD=${DEPLOY_METHOD})"
+	echo "Artifact ready at: ${ARTIFACT_PATH}"
 else
-	echo "Error: Unknown DEPLOY_METHOD '${DEPLOY_METHOD}'. Use 'github' or 'ssh'"
+	echo "Error: Unknown DEPLOY_METHOD '${DEPLOY_METHOD}'. Use 'ssh', 'ci-cd', or 'none'"
 	exit 1
 fi
 
 echo
 
-# 6. Generate Manifest (GitHub deployment only)
-if [[ ${DEPLOY_METHOD} == "github" ]] && [[ ${GENERATE_MANIFEST:-false} == "true" ]]; then
-	echo "6. Generating manifest.json..."
-	if [[ -f "./generate-manifest.sh" ]]; then
-		export REPO_URL="https://github.com/${REPO_OWNER}/${REPO_NAME}"
-		export RELEASE_TAG="${RELEASE_TAG:-latest}"
-		# Generate manifest from BUILD_DIR where all artifacts are
-		./generate-manifest.sh manifest.json "${BUILD_DIR}"
-
-		# Upload manifest to release
-		if command -v gh &>/dev/null; then
-			gh release upload "${RELEASE_TAG}" manifest.json \
-				--repo "${REPO_OWNER}/${REPO_NAME}" \
-				--clobber
-		else
-			curl -sS -X POST \
-				-H "Authorization: token ${GITHUB_TOKEN}" \
-				-H "Content-Type: application/json" \
-				--data-binary "@manifest.json" \
-				"https://uploads.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/${RELEASE_ID}/assets?name=manifest.json"
-		fi
-
-		echo "Manifest uploaded successfully"
-	else
-		echo "Warning: generate-manifest.sh not found, skipping manifest generation"
-	fi
-	echo
-fi
-
-# 7. Cleanup
-echo "7. Cleaning up build directory..."
+# 6. Cleanup
+echo "6. Cleaning up build directory..."
 rm -rf "${BUILD_DIR}"
 echo "Build directory removed"
 
