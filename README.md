@@ -114,7 +114,8 @@ The build system supports multiple deployment targets:
 
 The system uses Alpine Linux (musl) for all projects:
 
-- **Alpine Linux** (musl) - Static compilation for C/C++ and Rust projects
+- **Alpine Linux** (musl) - Static compilation for C/C++ projects
+- **rust:alpine** - Static compilation for Rust projects
 
 ## Building From Source
 
@@ -140,34 +141,28 @@ The script accepts environment variables for configuration:
 **Build GNU Make:**
 
 ```bash
-REPO_URL=https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz \
-BINARY_NAME=make \
-DEPLOY_METHOD=ssh \
-DEPLOY_USER=user \
-DEPLOY_HOST=192.168.1.100 \
-DEPLOY_PATH=/DATA/bin \
-./grow_glochidium.sh
+./grow_glochidium.sh \
+  https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz \
+  make \
+  "./configure LDFLAGS=-static && make -j$(nproc)"
 ```
 
-**Build Git (CI/CD mode):**
+**Build fastfetch:**
 
 ```bash
-REPO_URL=https://www.kernel.org/pub/software/scm/git/git-2.43.0.tar.xz \
-BINARY_NAME=git \
-DEPLOY_METHOD=ci-cd \
-./grow_glochidium.sh
+./grow_glochidium.sh \
+  https://github.com/fastfetch-cli/fastfetch \
+  fastfetch \
+  "cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXE_LINKER_FLAGS=-static -DENABLE_DRM=OFF && cmake --build build --target fastfetch"
 ```
 
-**Build Rust project (gpm):**
+**Build Rust project (starship):**
 
 ```bash
-cd glochidia
-podman run --rm -v "$(pwd)/gpm:/src:Z" -w /src rust:alpine sh -c '
-  apk add --no-cache musl-dev &&
-  cargo build --release --target x86_64-unknown-linux-musl &&
-  strip target/x86_64-unknown-linux-musl/release/gpm &&
-  cp target/x86_64-unknown-linux-musl/release/gpm /src/gpm-bin
-'
+./grow_glochidium.sh \
+  https://github.com/starship/starship \
+  starship \
+  "cargo build --release --target x86_64-unknown-linux-musl --no-default-features --features battery"
 ```
 
 ### Custom Build Commands
@@ -184,13 +179,12 @@ CUSTOM_BUILD_COMMAND="mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Rel
 ### Build Pipeline
 
 1. **Download Source** - Clones git repo or extracts tarball
-2. **Container Selection** - Alpine (C/C++) or Debian (Rust)
-3. **Compatibility Fixes** - Patches known musl issues (getenv, getopt, etc.)
+2. **Container Selection** - Alpine (C/C++) or rust:alpine (Rust)
+3. **Compatibility Fixes** - Sets musl-compatible flags (CFLAGS, LDFLAGS)
 4. **Compilation** - Builds statically with `-static` LDFLAGS
 5. **Artifact Extraction** - Copies binary from container
 6. **Verification** - Confirms static ELF linking
-7. **Deployment** - Uploads to GitHub Releases or SSH target
-8. **Manifest Generation** - Updates manifest.json with checksums
+7. **Deployment** - SSH deployment or artifact preservation for CI/CD
 
 ### Auto-Detection
 
@@ -200,7 +194,7 @@ The script automatically detects:
 - **CMakeLists.txt** → `cmake -DCMAKE_EXE_LINKER_FLAGS="-static" && make`
 - **build.sh** → Executes custom script
 
-Note: Rust projects (like gpm) use the Alpine rust container separately.
+Note: Rust projects automatically use the rust:alpine container.
 
 ### Distribution
 
@@ -265,15 +259,21 @@ With environment variables (no prompts):
   grow_glochidium.sh https://github.com/fastfetch-cli/fastfetch fastfetch
 ```
 
-With custom CMake build flags:
+With environment variables (no prompts):
 
 ```bash
-grow_glochidium.sh https://github.com/fastfetch-cli/fastfetch fastfetch \
-  "mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DENABLE_DRM=OFF .. && make"
+DEPLOY_METHOD=ci-cd ./grow_glochidium.sh \
+  https://github.com/fastfetch-cli/fastfetch \
+  fastfetch
 ```
 
+With SSH deployment:
+
 ```bash
-grow_glochidium.sh <repo_url> <binary_name> "make -f custom.mk"
+DEPLOY_USER=user DEPLOY_HOST=192.168.1.100 DEPLOY_PATH=/DATA/bin \
+./grow_glochidium.sh \
+  https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz \
+  make
 ```
 
 ## Project Structure
@@ -281,8 +281,7 @@ grow_glochidium.sh <repo_url> <binary_name> "make -f custom.mk"
 ```txt
 glochidia/
 ├── grow_glochidium.sh          # Universal native build & deploy script
-├── alpine-build.sh             # Container-side build executor (C/C++ projects)
-├── debian-build.sh             # Container-side build executor (Rust/cargo projects)
+├── alpine-build.sh             # Container-side build executor (all projects)
 ├── Examples.md                 # Build examples for various projects
 ├── .gitignore                  # Git ignore rules
 └── README.md                   # This file
@@ -361,10 +360,10 @@ For unsupported systems, provide a custom build command as the 3rd parameter.
 
 The build containers handle most projects automatically:
 
-- **Rust projects** - Uses Debian container with gnu host, cross-compiles to x86_64-unknown-linux-musl
-- **Rust static linking** - Sets `RUSTFLAGS="-C target-feature=+crt-static -C relocation-model=static"` for fully static binaries
+- **Rust projects** - Uses rust:alpine container with native musl toolchain
 - **CMake projects** - Includes `-DBUILD_SHARED_LIBS=OFF` to disable shared libraries
-- **C/Autoconf projects** - Sets `LDFLAGS="-static" CFLAGS="-static"` to enforce static linking
+- **C/Autoconf projects** - Sets `LDFLAGS="-static" CFLAGS="-static -std=gnu11"` to enforce static linking
+- **GCC 15 compatibility** - Forces gnu11 standard to avoid C23 function prototype issuese static linking
 - **Linux headers** - Includes linux-headers for projects requiring kernel interface headers
 - **Musl compatibility** - Handles musl-specific issues automatically
 
