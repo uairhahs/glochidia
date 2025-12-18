@@ -1,5 +1,3 @@
-Here is the translation of the guide for creating ZimaOS RAW packages.
-
 Note regarding consistent naming: In the examples below, the text zimaos_terminal (and zimaos-terminal) represents the specific package name/ID. Wherever this name appears, the content must be identical (consistent) across your directory names, configuration files, and systemd service names for the package to function correctly.
 
 Creating a RAW Package Program
