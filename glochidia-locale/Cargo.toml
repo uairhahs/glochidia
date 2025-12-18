@@ -9,7 +9,3 @@ libc = "0.2"
 [[bin]]
 name = "set_locale"
 path = "src/main.rs"
-
-[[bin]]
-name = "locale-gen"
-path = "src/locale_gen.rs"
