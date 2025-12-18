@@ -12,11 +12,11 @@ pub fn run(config: &Config, tool_name: &str) -> Result<()> {
     let tool = manifest::find_tool(&manifest, tool_name)
         .ok_or_else(|| anyhow::anyhow!("Tool '{}' not found in manifest", tool_name))?;
 
-    println!("Installing {} v{}", tool.name, tool.version);
+    println!("Installing {} v{}", tool_name, tool.version);
     println!("  License: {}", tool.license);
     println!("  Size: {} bytes", tool.size);
 
-    let dest = config.install_dir.join(&tool.name);
+    let dest = config.install_dir.join(tool_name);
 
     // Check if already installed
     if dest.exists() {
@@ -37,7 +37,7 @@ pub fn run(config: &Config, tool_name: &str) -> Result<()> {
     permissions.set_mode(0o755);
     fs::set_permissions(&dest, permissions)?;
 
-    println!("Successfully installed {} to {:?}", tool.name, dest);
+    println!("Successfully installed {} to {:?}", tool_name, dest);
     
     // Check if PATH is already configured
     if let Ok(path_env) = std::env::var("PATH") {
