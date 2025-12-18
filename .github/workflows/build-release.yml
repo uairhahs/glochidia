@@ -38,6 +38,7 @@ jobs:
             license: "ISC"
             source_url: "https://github.com/starship/starship"
             repo_url: "https://github.com/starship/starship"
+            git_ref: "v1.24.1"
             build_cmd: "cargo build --release --target x86_64-unknown-linux-musl --no-default-features --features battery"
 
     container:
@@ -49,14 +50,21 @@ jobs:
       - name: Install GNU tar for caching
         run: apk add --no-cache tar
 
-      - name: Get source hash for external repos
-        id: source-hash
+      - name: Fetch latest release version
+        id: fetch-version
         run: |
           if [ -n "${{ matrix.tool.repo_url }}" ]; then
-            HASH=$(git ls-remote ${{ matrix.tool.repo_url }} HEAD | cut -f1)
-            echo "hash=${HASH:0:8}" >> $GITHUB_OUTPUT
+            echo "Fetching latest release for ${{ matrix.tool.name }}..."
+            LATEST_TAG=$(wget -qO- "https://api.github.com/repos/$(echo ${{ matrix.tool.repo_url }} | sed 's|https://github.com/||')/releases/latest" | grep '"tag_name":' | sed -E 's/.*"tag_name": "([^"]+)".*/\1/')
+            if [ -z "$LATEST_TAG" ]; then
+              echo "Failed to fetch latest release, using configured version"
+              LATEST_TAG="${{ matrix.tool.git_ref || matrix.tool.version }}"
+            fi
+            echo "version=$LATEST_TAG" >> $GITHUB_OUTPUT
+            echo "Latest version: $LATEST_TAG"
           else
-            echo "hash=${{ github.sha }}" >> $GITHUB_OUTPUT
+            echo "version=${{ matrix.tool.version }}" >> $GITHUB_OUTPUT
+            echo "Using configured version: ${{ matrix.tool.version }}"
           fi
 
       - name: Cache compiled binary
@@ -64,16 +72,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ matrix.tool.name }}-bin
-          key: ${{ runner.os }}-binary-${{ matrix.tool.name }}-${{ matrix.tool.version }}-musl
+          key: ${{ runner.os }}-binary-${{ matrix.tool.name }}-${{ steps.fetch-version.outputs.version }}-musl
 
       - name: Install build dependencies
         run: apk add --no-cache git musl-dev file cmake make gcc g++ linux-headers
-
-      - name: Prepare cache directories
-        if: steps.cache-binary.outputs.cache-hit != 'true'
-        run: |
-          mkdir -p ~/.cargo/registry ~/.cargo/git
-          mkdir -p ${{ matrix.tool.working_dir }}/target
 
       - name: Cache cargo registry
         if: steps.cache-binary.outputs.cache-hit != 'true'
@@ -89,16 +91,8 @@ jobs:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Cache cargo build
-        if: steps.cache-binary.outputs.cache-hit != 'true'
-        uses: actions/cache@v4
-        with:
-          path: |
-            ${{ matrix.tool.working_dir }}/target
-            /tmp/build_${{ matrix.tool.name }}/target
-          key: ${{ runner.os }}-cargo-build-${{ matrix.tool.name }}-${{ matrix.tool.version }}-${{ steps.source-hash.outputs.hash }}-musl
-
       - name: Build ${{ matrix.tool.name }}
+        if: steps.cache-binary.outputs.cache-hit != 'true'
         run: |
           echo "Building ${{ matrix.tool.name }}..."
           WORKSPACE_DIR="$(pwd)"
@@ -110,7 +104,7 @@ jobs:
           elif [ -n "${{ matrix.tool.repo_url }}" ]; then
             # Build external repos
             BUILD_DIR="/tmp/build_${{ matrix.tool.name }}"
-            git clone ${{ matrix.tool.repo_url }} ${BUILD_DIR}
+            git clone --depth 1 --branch ${{ steps.fetch-version.outputs.version }} ${{ matrix.tool.repo_url }} ${BUILD_DIR}
             cd ${BUILD_DIR}
             eval "${{ matrix.tool.build_cmd }}"
             # Find and copy binary back to workspace
@@ -141,11 +135,17 @@ jobs:
           echo "Testing ${{ matrix.tool.name }}..."
           ./${{ matrix.tool.name }}-bin --version || ./${{ matrix.tool.name }}-bin --help || echo "No version/help available"
 
+      - name: Create version metadata
+        run: |
+          echo "${{ steps.fetch-version.outputs.version }}" > ${{ matrix.tool.name }}.version
+
       - name: Upload artifact with metadata
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.tool.name }}
-          path: ${{ matrix.tool.name }}-bin
+          path: |
+            ${{ matrix.tool.name }}-bin
+            ${{ matrix.tool.name }}.version
 
   build-c-tools:
     name: Build C/C++ Tools
@@ -173,43 +173,43 @@ jobs:
             description: "Bash Line Editor"
             license: "BSD-3-Clause"
             source_url: "https://github.com/akinomyoga/ble.sh"
+            git_ref: "v0.4.0-devel3"
             build_cmd: "make"
           - name: fastfetch
             version: "2.30.2"
             description: "System information tool"
             license: "MIT"
             source_url: "https://github.com/fastfetch-cli/fastfetch"
+            git_ref: "2.30.2"
             build_cmd: "cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXE_LINKER_FLAGS=-static -DENABLE_SYSTEM_YYJSON=OFF -DENABLE_DIRECTWRITE=OFF -DENABLE_XRANDR=OFF -DENABLE_X11=OFF -DENABLE_WAYLAND=OFF -DENABLE_GIO=OFF -DENABLE_DCONF=OFF -DENABLE_DBUS=OFF -DENABLE_XFCONF=OFF -DENABLE_SQLITE3=OFF -DENABLE_IMAGEMAGICK=OFF -DENABLE_CHAFA=OFF -DENABLE_ZLIB=OFF -DENABLE_EGL=OFF -DENABLE_GLX=OFF -DENABLE_OSMESA=OFF -DENABLE_OPENCL=OFF -DENABLE_VULKAN=OFF -DENABLE_RPM=OFF -DENABLE_DRM=OFF -DENABLE_FREETYPE=OFF && cmake --build build --target fastfetch"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Get source hash
-        id: source-hash
+      - name: Fetch latest release version
+        id: fetch-version
         run: |
-          if [[ "${{ matrix.tool.source_url }}" == *"github.com"* ]]; then
-            REPO_URL="${{ matrix.tool.source_url }}"
-            HASH=$(git ls-remote ${REPO_URL} HEAD | cut -f1)
-            echo "hash=${HASH:0:8}" >> $GITHUB_OUTPUT
+          if [[ "${{ matrix.tool.source_url }}" == *"github.com"* ]] && [ -n "${{ matrix.tool.git_ref }}" ]; then
+            echo "Fetching latest release for ${{ matrix.tool.name }}..."
+            REPO_PATH=$(echo "${{ matrix.tool.source_url }}" | sed 's|https://github.com/||' | sed 's|\.git$||')
+            LATEST_TAG=$(curl -s "https://api.github.com/repos/${REPO_PATH}/releases/latest" | grep '"tag_name":' | sed -E 's/.*"tag_name": "([^"]+)".*/\1/')
+            if [ -z "$LATEST_TAG" ]; then
+              echo "Failed to fetch latest release, using configured version"
+              LATEST_TAG="${{ matrix.tool.git_ref }}"
+            fi
+            echo "version=$LATEST_TAG" >> $GITHUB_OUTPUT
+            echo "Latest version: $LATEST_TAG"
           else
-            echo "hash=${{ matrix.tool.source_sha256 }}" >> $GITHUB_OUTPUT
+            echo "version=${{ matrix.tool.version }}" >> $GITHUB_OUTPUT
+            echo "Using configured version: ${{ matrix.tool.version }}"
           fi
 
-      - name: Cache compiled binary
-        id: cache-binary
-        uses: actions/cache@v4
-        with:
-          path: ${{ matrix.tool.name }}-bin
-          key: ${{ runner.os }}-binary-${{ matrix.tool.name }}-${{ matrix.tool.version }}-${{ steps.source-hash.outputs.hash }}-musl-static
-
       - name: Install podman
-        if: steps.cache-binary.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y podman
 
       - name: Build ${{ matrix.tool.name }}
-        if: steps.cache-binary.outputs.cache-hit != 'true'
         run: |
           # Set up environment for grow_glochidium.sh
           export CONTAINER_RUNTIME=podman
@@ -248,7 +248,6 @@ jobs:
           fi
 
       - name: Verify static binary
-        if: steps.cache-binary.outputs.cache-hit != 'true'
         run: |
           echo "Verifying ${{ matrix.tool.name }} is statically linked..."
           file ${{ matrix.tool.name }}-bin
@@ -266,11 +265,17 @@ jobs:
           echo "Testing ${{ matrix.tool.name }}..."
           ./${{ matrix.tool.name }}-bin --version
 
+      - name: Create version metadata
+        run: |
+          echo "${{ steps.fetch-version.outputs.version }}" > ${{ matrix.tool.name }}.version
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.tool.name }}
-          path: ${{ matrix.tool.name }}-bin
+          path: |
+            ${{ matrix.tool.name }}-bin
+            ${{ matrix.tool.name }}.version
 
   generate-manifest:
     name: Generate Manifest and Create Release
@@ -289,7 +294,7 @@ jobs:
 
       - name: Prepare binaries
         run: |
-          mkdir -p release-files
+          mkdir -p release-files versions
           echo "Preparing binaries..."
           for dir in artifacts/*/; do
             tool=$(basename "$dir")
@@ -297,9 +302,14 @@ jobs:
               mv "$dir/${tool}-bin" "release-files/${tool}"
               echo "  - $tool"
             fi
+            if [ -f "$dir/${tool}.version" ]; then
+              mv "$dir/${tool}.version" "versions/${tool}.version"
+            fi
           done
           chmod +x release-files/*
           ls -lh release-files/
+          echo "Versions collected:"
+          ls -lh versions/ || true
 
       - name: Download GPL licenses
         run: |
@@ -324,16 +334,22 @@ jobs:
           RELEASE_TAG = "${{ github.event.inputs.release_tag || 'latest' }}"
           REPO = "${{ github.repository }}"
 
+          # Read versions from version files
+          def read_version(tool_name):
+              version_file = f"versions/{tool_name}.version"
+              if os.path.exists(version_file):
+                  with open(version_file, 'r') as f:
+                      return f.read().strip()
+              return "unknown"
+
           tools_metadata = {
               "gpm": {
-                  "version": "0.1.0",
                   "description": "Glochidia Package Manager",
                   "license": "GPL-2.0-or-later",
                   "source_url": f"https://github.com/{REPO}",
                   "build_type": "rust-alpine"
               },
               "make": {
-                  "version": "4.4.1",
                   "description": "GNU Make build tool",
                   "license": "GPL-3.0-or-later",
                   "source_url": "https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz",
@@ -341,7 +357,6 @@ jobs:
                   "build_type": "alpine"
               },
               "gawk": {
-                  "version": "5.3.2",
                   "description": "GNU Awk text processing",
                   "license": "GPL-3.0-or-later",
                   "source_url": "https://ftp.gnu.org/gnu/gawk/gawk-5.3.2.tar.xz",
@@ -349,21 +364,18 @@ jobs:
                   "build_type": "alpine"
               },
               "starship": {
-                  "version": "1.24.1",
                   "description": "Cross-shell prompt",
                   "license": "ISC",
                   "source_url": "https://github.com/starship/starship",
                   "build_type": "rust-alpine"
               },
               "fastfetch": {
-                  "version": "2.30.2",
                   "description": "System information tool",
                   "license": "MIT",
                   "source_url": "https://github.com/fastfetch-cli/fastfetch",
                   "build_type": "alpine"
               },
               "ble.sh": {
-                  "version": "0.4.0",
                   "description": "Bash Line Editor",
                   "license": "BSD-3-Clause",
                   "source_url": "https://github.com/akinomyoga/ble.sh",
@@ -395,8 +407,10 @@ jobs:
                   continue
               
               metadata = tools_metadata[tool_name]
+              tool_version = read_version(tool_name)
+              
               tool_entry = {
-                  "version": metadata["version"],
+                  "version": tool_version,
                   "description": metadata["description"],
                   "url": f"https://github.com/{REPO}/releases/download/{RELEASE_TAG}/{tool_name}",
                   "sha256": sha256,
