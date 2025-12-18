@@ -1,6 +1,5 @@
 #!/bin/sh
-# Alpine build script for C/C++ projects (autoconf, make, cmake)
-# Note: Rust projects use rust:alpine container directly, not this script
+# Alpine build script for C/C++ and Rust projects
 set -e
 cd /src
 
@@ -12,7 +11,9 @@ apk add --no-cache build-base wget curl git autoconf automake libtool pkgconfig 
 echo "Starting build..."
 # For CMake and autoconf to prefer static libraries
 export LDFLAGS="-static"
-export CFLAGS="-static"
+# GCC 15 defaults to C23 which makes () mean (void), conflicting with (const char *)
+# We force gnu11 to restore old behavior where () means unspecified arguments
+export CFLAGS="-static -D_GNU_SOURCE -std=gnu11"
 export CXXFLAGS="-static"
 
 eval "${BUILD_COMMAND}"
@@ -31,6 +32,8 @@ elif [ -f "out/${ARTIFACT_NAME}.sh" ]; then
 	ARTIFACT="out/${ARTIFACT_NAME}.sh"
 elif [ -f "target/release/${ARTIFACT_NAME}" ]; then
 	ARTIFACT="target/release/${ARTIFACT_NAME}"
+elif [ -f "target/x86_64-unknown-linux-musl/release/${ARTIFACT_NAME}" ]; then
+	ARTIFACT="target/x86_64-unknown-linux-musl/release/${ARTIFACT_NAME}"
 elif [ -f "target/release/edit" ]; then
 	# For cargo builds, try 'edit' as fallback
 	ARTIFACT="target/release/edit"

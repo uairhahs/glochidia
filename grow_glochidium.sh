@@ -53,10 +53,13 @@ if [[ -z ${DEPLOY_PATH} ]]; then
 	}
 fi
 
-# Verify SSH connectivity before proceeding
-echo "Verifying SSH connectivity..."
-verify_ssh_setup "${DEPLOY_USER}" "${DEPLOY_HOST}"
-echo "SSH connectivity verified"
+# Verify SSH connectivity before proceeding (only for SSH deployment)
+DEPLOY_METHOD="${DEPLOY_METHOD:-ssh}"
+if [[ ${DEPLOY_METHOD} == "ssh" ]]; then
+	echo "Verifying SSH connectivity..."
+	verify_ssh_setup "${DEPLOY_USER}" "${DEPLOY_HOST}"
+	echo "SSH connectivity verified"
+fi
 echo
 
 # ============ PIPELINE ============
@@ -117,12 +120,12 @@ echo "Build command: ${BUILD_COMMAND}"
 # 3. Build in container
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Use Debian for Rust/cargo builds (proc-macros need gnu host), Alpine for everything else
+# Use Rust Alpine for Rust/cargo builds, Standard Alpine for everything else
 if echo "${BUILD_COMMAND}" | grep -q "cargo"; then
-	echo "3. Building Rust project in Debian container (cross-compile to musl)..."
-	BUILD_SCRIPT="${SCRIPT_DIR}/debian-build.sh"
-	CONTAINER_IMAGE="debian:bookworm-slim"
-	SCRIPT_NAME="debian-build.sh"
+	echo "3. Building Rust project in rust:alpine container..."
+	BUILD_SCRIPT="${SCRIPT_DIR}/alpine-build.sh"
+	CONTAINER_IMAGE="rust:alpine"
+	SCRIPT_NAME="alpine-build.sh"
 else
 	echo "3. Building in Alpine container..."
 	BUILD_SCRIPT="${SCRIPT_DIR}/alpine-build.sh"
