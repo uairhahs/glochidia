@@ -109,18 +109,13 @@ jobs:
             cd ${{ matrix.tool.working_dir }}
             cargo build --release --target x86_64-unknown-linux-musl
             
-            # Handle glochidia-locale which produces two binaries
+            # Handle glochidia-locale
             if [ "${{ matrix.tool.name }}" = "glochidia-locale" ]; then
               strip target/x86_64-unknown-linux-musl/release/set_locale
-              strip target/x86_64-unknown-linux-musl/release/locale-gen
               cp target/x86_64-unknown-linux-musl/release/set_locale ../set_locale-bin
-              cp target/x86_64-unknown-linux-musl/release/locale-gen ../locale-gen-bin
-              # Extract version from binaries (both should report same package version)
+              # Extract version from set_locale binary
               VERSION_OUTPUT=$(target/x86_64-unknown-linux-musl/release/set_locale --version 2>&1 || echo "unknown")
               VERSION=$(echo "$VERSION_OUTPUT" | grep -oP '\d+\.\d+\.\d+' | head -n1 || echo "${{ steps.fetch-version.outputs.version }}")
-              echo "$VERSION" > ../set_locale.version.tmp
-              echo "$VERSION" > ../locale-gen.version.tmp
-              # Also create glochidia-locale.version.tmp for standard handling
               echo "$VERSION" > ../glochidia-locale.version.tmp
             else
               strip target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }}
@@ -194,8 +189,6 @@ jobs:
             ${{ matrix.tool.name }}.version
             set_locale-bin
             set_locale.version
-            locale-gen-bin
-            locale-gen.version
 
   build-c-tools:
     name: Build C/C++ Tools
@@ -365,13 +358,6 @@ jobs:
             if [ -f "$dir/set_locale.version" ]; then
               mv "$dir/set_locale.version" "versions/set_locale.version"
             fi
-            if [ -f "$dir/locale-gen-bin" ]; then
-              mv "$dir/locale-gen-bin" "release-files/locale-gen"
-              echo "  - locale-gen"
-            fi
-            if [ -f "$dir/locale-gen.version" ]; then
-              mv "$dir/locale-gen.version" "versions/locale-gen.version"
-            fi
           done
           chmod +x release-files/*
           ls -lh release-files/
@@ -472,12 +458,6 @@ jobs:
                   "license": "GPL-2.0-or-later",
                   "source_url": f"https://github.com/{REPO}",
                   "build_type": "rust-alpine"
-              },
-              "locale-gen": {
-                  "description": "Locale generation utility",
-                  "license": "GPL-2.0-or-later",
-                  "source_url": f"https://github.com/{REPO}",
-                  "build_type": "rust-alpine"
               }
           }
 
@@ -558,7 +538,9 @@ jobs:
 
               for tool_name in sorted(manifest['tools'].keys()):
                   tool = manifest['tools'][tool_name]
-                  f.write(f"- **{tool_name}** v{tool['version']} - {tool['description']}\n")
+                  # Strip leading 'v' from version if present to avoid 'vv' prefix
+                  version = tool['version'].lstrip('v') if tool['version'] else 'unknown'
+                  f.write(f"- **{tool_name}** v{version} - {tool['description']}\n")
 
               f.write("\n### Installation\n")
               f.write("```bash\n")
