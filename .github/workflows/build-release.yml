@@ -173,6 +173,13 @@ jobs:
           if [ -f "${{ matrix.tool.name }}.version.tmp" ]; then
             mv ${{ matrix.tool.name }}.version.tmp ${{ matrix.tool.name }}.version
             echo "Version extracted from binary: $(cat ${{ matrix.tool.name }}.version)"
+            # Handle additional binaries for glochidia-locale
+            if [ -f "set_locale.version.tmp" ]; then
+              mv set_locale.version.tmp set_locale.version
+              mv locale-gen.version.tmp locale-gen.version
+              echo "Version extracted for set_locale: $(cat set_locale.version)"
+              echo "Version extracted for locale-gen: $(cat locale-gen.version)"
+            fi
           else
             echo "${{ steps.fetch-version.outputs.version }}" > ${{ matrix.tool.name }}.version
             echo "Using fetched version: ${{ steps.fetch-version.outputs.version }}"
@@ -185,6 +192,10 @@ jobs:
           path: |
             ${{ matrix.tool.name }}-bin
             ${{ matrix.tool.name }}.version
+            set_locale-bin
+            set_locale.version
+            locale-gen-bin
+            locale-gen.version
 
   build-c-tools:
     name: Build C/C++ Tools
@@ -305,13 +316,6 @@ jobs:
           if [ -f "${{ matrix.tool.name }}.version.tmp" ]; then
             mv ${{ matrix.tool.name }}.version.tmp ${{ matrix.tool.name }}.version
             echo "Version extracted from binary: $(cat ${{ matrix.tool.name }}.version)"
-            # Handle additional binaries for glochidia-locale
-            if [ -f "set_locale.version.tmp" ]; then
-              mv set_locale.version.tmp set_locale.version
-              mv locale-gen.version.tmp locale-gen.version
-              echo "Version extracted for set_locale: $(cat set_locale.version)"
-              echo "Version extracted for locale-gen: $(cat locale-gen.version)"
-            fi
           else
             echo "${{ steps.fetch-version.outputs.version }}" > ${{ matrix.tool.name }}.version
             echo "Using fetched version: ${{ steps.fetch-version.outputs.version }}"
@@ -324,10 +328,6 @@ jobs:
           path: |
             ${{ matrix.tool.name }}-bin
             ${{ matrix.tool.name }}.version
-            set_locale-bin
-            set_locale.version
-            locale-gen-bin
-            locale-gen.version
 
   generate-manifest:
     name: Generate Manifest and Create Release
@@ -588,11 +588,27 @@ jobs:
 
           cat release-body.md
 
+      - name: Determine release version
+        id: release-version
+        run: |
+          if [ -n "${{ github.event.inputs.release_tag }}" ]; then
+            # Use explicitly provided tag from workflow dispatch
+            VERSION="${{ github.event.inputs.release_tag }}"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            # Use tag from push event (e.g., v1.0.0)
+            VERSION="${GITHUB_REF#refs/tags/}"
+          else
+            # Push to master branch always uses "latest"
+            VERSION="latest"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Release version: $VERSION"
+
       - name: Create/Update Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.release_tag || 'latest' }}
-          name: Release ${{ github.event.inputs.release_tag || 'latest' }}
+          tag_name: ${{ steps.release-version.outputs.version }}
+          name: Release ${{ steps.release-version.outputs.version }}
           body_path: release-body.md
           files: |
             release-files/*
