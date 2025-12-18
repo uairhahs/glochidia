@@ -21,6 +21,7 @@ jobs:
     name: Build Rust Tools
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         tool:
           - name: gpm
@@ -53,7 +54,7 @@ jobs:
         run: apk add --no-cache tar
 
       - name: Install build dependencies
-        run: apk add --no-cache musl-dev file git cmake make gcc g++
+        run: apk add --no-cache musl-dev file git cmake make gcc g++ linux-headers
 
       - name: Prepare cache directories
         run: |
@@ -129,6 +130,7 @@ jobs:
     name: Build C/C++ Tools
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         tool:
           - name: make
