@@ -427,6 +427,13 @@ jobs:
           echo "Release files:"
           ls -lh release-files/
 
+      - name: Build ZimaOS RAW package
+        run: |
+          sudo apt-get update && sudo apt-get install -y squashfs-tools
+          bash zpkg/build-zpkg.sh
+          cp gpm.raw release-files/
+          echo "Added gpm.raw to release files"
+
       - name: Create/Update Release
         uses: softprops/action-gh-release@v1
         with:
