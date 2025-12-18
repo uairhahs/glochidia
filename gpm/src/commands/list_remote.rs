@@ -13,10 +13,10 @@ pub fn run(config: &Config) -> Result<()> {
     );
     println!("{}", "-".repeat(80));
 
-    for tool in &manifest.tools {
+    for (name, tool) in &manifest.tools {
         println!(
             "{:<15}\t{:<10}\t{:<15}\t{}",
-            tool.name, tool.version, tool.license, tool.description
+            name, tool.version, tool.license, tool.description
         );
     }
 

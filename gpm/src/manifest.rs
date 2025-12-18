@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::time::SystemTime;
 
@@ -9,12 +10,11 @@ use crate::config::Config;
 pub struct Manifest {
     pub repo_version: String,
     pub updated_at: String,
-    pub tools: Vec<Tool>,
+    pub tools: HashMap<String, Tool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Tool {
-    pub name: String,
     pub version: String,
     pub description: String,
     pub url: String,
@@ -23,7 +23,8 @@ pub struct Tool {
     pub build_type: String,
     pub license: String,
     pub source_url: String,
-    pub source_sha256: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_sha256: Option<String>,
 }
 
 const CACHE_TTL_HOURS: i64 = 24;
@@ -82,5 +83,5 @@ fn load_cached_manifest(config: &Config) -> Result<Manifest> {
 }
 
 pub fn find_tool<'a>(manifest: &'a Manifest, tool_name: &str) -> Option<&'a Tool> {
-    manifest.tools.iter().find(|t| t.name == tool_name)
+    manifest.tools.get(tool_name)
 }
