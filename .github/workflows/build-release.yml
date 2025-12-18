@@ -49,6 +49,16 @@ jobs:
       - name: Install GNU tar for caching
         run: apk add --no-cache tar
 
+      - name: Get source hash for external repos
+        id: source-hash
+        run: |
+          if [ -n "${{ matrix.tool.repo_url }}" ]; then
+            HASH=$(git ls-remote ${{ matrix.tool.repo_url }} HEAD | cut -f1)
+            echo "hash=${HASH:0:8}" >> $GITHUB_OUTPUT
+          else
+            echo "hash=${{ github.sha }}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Cache compiled binary
         id: cache-binary
         uses: actions/cache@v4
@@ -86,7 +96,7 @@ jobs:
           path: |
             ${{ matrix.tool.working_dir }}/target
             /tmp/build_${{ matrix.tool.name }}/target
-          key: ${{ runner.os }}-cargo-build-${{ matrix.tool.name }}-${{ matrix.tool.version }}-musl
+          key: ${{ runner.os }}-cargo-build-${{ matrix.tool.name }}-${{ matrix.tool.version }}-${{ steps.source-hash.outputs.hash }}-musl
 
       - name: Build ${{ matrix.tool.name }}
         run: |
@@ -174,12 +184,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Get source hash
+        id: source-hash
+        run: |
+          if [[ "${{ matrix.tool.source_url }}" == *"github.com"* ]]; then
+            REPO_URL="${{ matrix.tool.source_url }}"
+            HASH=$(git ls-remote ${REPO_URL} HEAD | cut -f1)
+            echo "hash=${HASH:0:8}" >> $GITHUB_OUTPUT
+          else
+            echo "hash=${{ matrix.tool.source_sha256 }}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Cache compiled binary
         id: cache-binary
         uses: actions/cache@v4
         with:
           path: ${{ matrix.tool.name }}-bin
-          key: ${{ runner.os }}-binary-${{ matrix.tool.name }}-${{ matrix.tool.version }}-musl-static
+          key: ${{ runner.os }}-binary-${{ matrix.tool.name }}-${{ matrix.tool.version }}-${{ steps.source-hash.outputs.hash }}-musl-static
 
       - name: Install podman
         if: steps.cache-binary.outputs.cache-hit != 'true'
