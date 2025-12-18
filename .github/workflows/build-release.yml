@@ -60,12 +60,8 @@ jobs:
           path: ${{ matrix.tool.name }}-bin
           key: ${{ runner.os }}-binary-${{ matrix.tool.name }}-${{ matrix.tool.version }}-musl
 
-      - name: Install git (required for shadow-rs)
-        run: apk add --no-cache git
-
       - name: Install build dependencies
-        if: steps.cache-binary.outputs.cache-hit != 'true'
-        run: apk add --no-cache musl-dev file cmake make gcc g++ linux-headers
+        run: apk add --no-cache git musl-dev file cmake make gcc g++ linux-headers
 
       - name: Prepare cache directories
         if: steps.cache-binary.outputs.cache-hit != 'true'
