@@ -1,0 +1,15 @@
+[package]
+name = "glochidia-locale"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+libc = "0.2"
+
+[[bin]]
+name = "set_locale"
+path = "src/main.rs"
+
+[[bin]]
+name = "locale-gen"
+path = "src/locale_gen.rs"

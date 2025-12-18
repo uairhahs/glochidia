@@ -44,11 +44,11 @@ jobs:
             repo_url: "https://github.com/microsoft/edit"
             binary_name: "edit"
             build_cmd: "export RUSTC_BOOTSTRAP=1 && cargo build --release --target x86_64-unknown-linux-musl"
-          - name: set_locale
-            description: "Locale setting utility"
+          - name: glochidia-locale
+            description: "Locale management utilities (set_locale, locale-gen)"
             license: "GPL-2.0-or-later"
             source_url: "https://github.com/${{ github.repository }}"
-            working_dir: set_locale
+            working_dir: glochidia-locale
 
     container:
       image: rust:alpine
@@ -108,12 +108,26 @@ jobs:
           if [ -n "${{ matrix.tool.working_dir }}" ]; then
             cd ${{ matrix.tool.working_dir }}
             cargo build --release --target x86_64-unknown-linux-musl
-            strip target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }}
-            cp target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }} ../${{ matrix.tool.name }}-bin
-            # Extract version from built binary
-            VERSION_OUTPUT=$(target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }} --version 2>&1 || echo "unknown")
-            VERSION=$(echo "$VERSION_OUTPUT" | grep -oP '\d+\.\d+\.\d+' | head -n1 || echo "${{ steps.fetch-version.outputs.version }}")
-            echo "$VERSION" > ../${{ matrix.tool.name }}.version.tmp
+            
+            # Handle glochidia-locale which produces two binaries
+            if [ "${{ matrix.tool.name }}" = "glochidia-locale" ]; then
+              strip target/x86_64-unknown-linux-musl/release/set_locale
+              strip target/x86_64-unknown-linux-musl/release/locale-gen
+              cp target/x86_64-unknown-linux-musl/release/set_locale ../set_locale-bin
+              cp target/x86_64-unknown-linux-musl/release/locale-gen ../locale-gen-bin
+              # Extract version from set_locale binary
+              VERSION_OUTPUT=$(target/x86_64-unknown-linux-musl/release/set_locale --version 2>&1 || echo "unknown")
+              VERSION=$(echo "$VERSION_OUTPUT" | grep -oP '\d+\.\d+\.\d+' | head -n1 || echo "${{ steps.fetch-version.outputs.version }}")
+              echo "$VERSION" > ../set_locale.version.tmp
+              echo "$VERSION" > ../locale-gen.version.tmp
+            else
+              strip target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }}
+              cp target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }} ../${{ matrix.tool.name }}-bin
+              # Extract version from built binary
+              VERSION_OUTPUT=$(target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }} --version 2>&1 || echo "unknown")
+              VERSION=$(echo "$VERSION_OUTPUT" | grep -oP '\d+\.\d+\.\d+' | head -n1 || echo "${{ steps.fetch-version.outputs.version }}")
+              echo "$VERSION" > ../${{ matrix.tool.name }}.version.tmp
+            fi
           elif [ -n "${{ matrix.tool.repo_url }}" ]; then
             # Build external repos
             BUILD_DIR="/tmp/build_${{ matrix.tool.name }}"
@@ -309,6 +323,10 @@ jobs:
           path: |
             ${{ matrix.tool.name }}-bin
             ${{ matrix.tool.name }}.version
+            set_locale-bin
+            set_locale.version
+            locale-gen-bin
+            locale-gen.version
 
   generate-manifest:
     name: Generate Manifest and Create Release
@@ -337,6 +355,21 @@ jobs:
             fi
             if [ -f "$dir/${tool}.version" ]; then
               mv "$dir/${tool}.version" "versions/${tool}.version"
+            fi
+            # Handle glochidia-locale's additional binaries
+            if [ -f "$dir/set_locale-bin" ]; then
+              mv "$dir/set_locale-bin" "release-files/set_locale"
+              echo "  - set_locale"
+            fi
+            if [ -f "$dir/set_locale.version" ]; then
+              mv "$dir/set_locale.version" "versions/set_locale.version"
+            fi
+            if [ -f "$dir/locale-gen-bin" ]; then
+              mv "$dir/locale-gen-bin" "release-files/locale-gen"
+              echo "  - locale-gen"
+            fi
+            if [ -f "$dir/locale-gen.version" ]; then
+              mv "$dir/locale-gen.version" "versions/locale-gen.version"
             fi
           done
           chmod +x release-files/*
@@ -438,6 +471,12 @@ jobs:
                   "license": "GPL-2.0-or-later",
                   "source_url": f"https://github.com/{REPO}",
                   "build_type": "rust-alpine"
+              },
+              "locale-gen": {
+                  "description": "Locale generation utility",
+                  "license": "GPL-2.0-or-later",
+                  "source_url": f"https://github.com/{REPO}",
+                  "build_type": "rust-alpine"
               }
           }
 
@@ -500,7 +539,12 @@ jobs:
 
       - name: Generate release body
         run: |
-          python3 << 'PYEOF'
+          REPO="${{ github.repository }}"
+          RELEASE_TAG="${{ github.event.inputs.release_tag || 'latest' }}"
+          BUILD_INFO="${{ github.event_name == 'workflow_dispatch' && 'manually' || 'from tag push' }}"
+          COMMIT="${{ github.sha }}"
+
+          python3 << PYEOF
           import json
 
           with open('release-files/manifest.json', 'r') as f:
@@ -516,18 +560,32 @@ jobs:
                   f.write(f"- **{tool_name}** v{tool['version']} - {tool['description']}\n")
 
               f.write("\n### Installation\n")
+              f.write("```bash\n")
+              f.write("# Download and install gpm\n")
+              f.write(f"wget https://github.com/${REPO}/releases/download/${RELEASE_TAG}/gpm\n")
+              f.write("chmod +x gpm\n")
+              f.write("mv gpm /DATA/bin/\n\n")
+              f.write("# Configure PATH and install tools\n")
+              f.write("gpm setup-path\n")
+              f.write("source ~/.bashrc\n")
+              f.write("gpm install make\n")
+              f.write("gpm install gawk\n")
+              f.write("gpm list\n")
+              f.write("```\n\n")
+              f.write("### Verification\n")
+              f.write("- \`manifest.json\` - SHA256 checksums for all binaries\n")
+              f.write("- \`SOURCES.txt\` - Source code provenance\n")
+              f.write("- \`COPYING\` - GPL compliance notice\n")
+              f.write("- \`licenses/\` - Full license texts\n\n")
+              f.write("### Build Information\n")
+              f.write(f"- Built: ${BUILD_INFO}\n")
+              f.write(f"- Commit: ${COMMIT}\n")
+              f.write("- All binaries verified as statically linked\n")
 
           print("Generated release body with tool versions")
           PYEOF
 
           cat release-body.md
-
-      - name: Build ZimaOS RAW package
-        run: |
-          sudo apt-get update && sudo apt-get install -y squashfs-tools
-          bash zpkg/build-zpkg.sh
-          cp gpm.raw release-files/
-          echo "Added gpm.raw to release files"
 
       - name: Create/Update Release
         uses: softprops/action-gh-release@v1
@@ -535,33 +593,6 @@ jobs:
           tag_name: ${{ github.event.inputs.release_tag || 'latest' }}
           name: Release ${{ github.event.inputs.release_tag || 'latest' }}
           body_path: release-body.md
-          append_body: true
-          body: |
-            ### Installation
-            ```bash
-            # Download and install gpm
-            wget https://github.com/${{ github.repository }}/releases/download/${{ github.event.inputs.release_tag || 'latest' }}/gpm
-            chmod +x gpm
-            mv gpm /DATA/bin/
-
-            # Configure PATH and install tools
-            gpm setup-path
-            source ~/.bashrc
-            gpm install make
-            gpm install gawk
-            gpm list
-            ```
-
-            ### Verification
-            - `manifest.json` - SHA256 checksums for all binaries
-            - `SOURCES.txt` - Source code provenance
-            - `COPYING` - GPL compliance notice
-            - `licenses/` - Full license texts
-
-            ### Build Information
-            - Built: ${{ github.event_name == 'workflow_dispatch' && 'manually' || 'from tag push' }}
-            - Commit: ${{ github.sha }}
-            - All binaries verified as statically linked
           files: |
             release-files/*
           draft: false
