@@ -31,10 +31,10 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Install a tool
+    /// Install or upgrade one or more tools
     Install {
-        /// Name of the tool to install
-        tool_name: String,
+        /// Names or patterns of tools to install/upgrade (supports wildcards like 'g*' or '*')
+        tool_names: Vec<String>,
     },
     /// List installed tools
     List,
@@ -49,11 +49,7 @@ pub enum Commands {
     },
     /// Update manifest cache
     Update,
-    /// Upgrade an installed tool
-    Upgrade {
-        /// Name of the tool to upgrade
-        tool_name: String,
-    },
+
     /// Configure shell PATH for installed binaries
     #[command(name = "setup-path")]
     SetupPath,
