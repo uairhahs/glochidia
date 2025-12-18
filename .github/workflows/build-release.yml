@@ -64,7 +64,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ matrix.tool.name }}-bin
-          key: ${{ runner.os }}-binary-${{ matrix.tool.name }}-${{ matrix.tool.version }}-${{ steps.source-hash.outputs.hash }}-musl
+          key: ${{ runner.os }}-binary-${{ matrix.tool.name }}-${{ matrix.tool.version }}-musl
 
       - name: Install build dependencies
         run: apk add --no-cache git musl-dev file cmake make gcc g++ linux-headers
