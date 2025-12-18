@@ -6,13 +6,29 @@ use crate::config::Config;
 use crate::downloader;
 use crate::manifest;
 
-pub fn run(config: &Config, tool_patterns: &[String]) -> Result<()> {
+pub fn run(config: &Config, tool_patterns: &[String], all: bool) -> Result<()> {
     let manifest = manifest::fetch_manifest(config)?;
+
+    // Sanitize arguments - if all flag is set or no patterns provided, treat as "*"
+    let patterns = if all || tool_patterns.is_empty() {
+        vec!["*".to_string()]
+    } else {
+        // Filter out patterns that look like shell-expanded paths (contain / or .)
+        tool_patterns
+            .iter()
+            .filter(|p| !p.contains('/') && !p.starts_with('.'))
+            .cloned()
+            .collect::<Vec<_>>()
+    };
+
+    if patterns.is_empty() {
+        anyhow::bail!("No valid tool patterns specified. Use --all to install all tools.");
+    }
 
     // Expand patterns to actual tool names
     let mut tools_to_install = Vec::new();
 
-    for pattern in tool_patterns {
+    for pattern in &patterns {
         if pattern == "*" {
             // Install all available tools
             for tool_name in manifest.tools.keys() {

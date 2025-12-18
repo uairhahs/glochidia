@@ -35,17 +35,25 @@ pub enum Commands {
     Install {
         /// Names or patterns of tools to install/upgrade (supports wildcards like 'g*' or '*')
         tool_names: Vec<String>,
+
+        /// Install all available tools
+        #[arg(short, long)]
+        all: bool,
     },
     /// List installed tools
     List,
     /// List available tools from manifest
     #[command(name = "list-remote")]
     ListRemote,
-    /// Remove an installed tool
+    /// Remove one or more installed tools
     #[command(alias = "uninstall", alias = "rm")]
     Remove {
-        /// Name of the tool to remove
-        tool_name: String,
+        /// Names or patterns of tools to remove (supports wildcards like 'g*' or '*')
+        tool_names: Vec<String>,
+
+        /// Remove all installed tools
+        #[arg(short, long)]
+        all: bool,
     },
     /// Update manifest cache
     Update,

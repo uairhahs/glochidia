@@ -52,6 +52,11 @@ fn main() {
         exit(1);
     }
 
+    if args[1] == "--version" || args[1] == "-v" {
+        println!("set_locale {}", env!("CARGO_PKG_VERSION"));
+        exit(0);
+    }
+
     let locale = &args[1];
 
     // Validate locale is available
