@@ -22,7 +22,7 @@ pub fn run(config: &Config, tool_name: &str) -> Result<()> {
     let tool = manifest::find_tool(&manifest, tool_name)
         .ok_or_else(|| anyhow::anyhow!("Tool '{}' not found in manifest", tool_name))?;
 
-    println!("Upgrading {} to v{}", tool.name, tool.version);
+    println!("Upgrading {} to v{}", tool_name, tool.version);
     println!("  License: {}", tool.license);
     println!("  Size: {} bytes", tool.size);
 
@@ -41,7 +41,7 @@ pub fn run(config: &Config, tool_name: &str) -> Result<()> {
     // Atomic replace
     fs::rename(&temp_dest, &dest).context("Failed to replace binary")?;
 
-    println!("Successfully upgraded {} to v{}", tool.name, tool.version);
+    println!("Successfully upgraded {} to v{}", tool_name, tool.version);
 
     Ok(())
 }
