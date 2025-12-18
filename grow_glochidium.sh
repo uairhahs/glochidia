@@ -206,7 +206,7 @@ fi
 DEPLOY_METHOD="${DEPLOY_METHOD:-ssh}"
 
 if [[ ${DEPLOY_METHOD} == "ssh" ]]; then
-	# Legacy SSH/rsync deployment
+	# SSH/rsync deployment (default local method)
 	echo "Using SSH deployment..."
 
 	if [[ -z ${DEPLOY_USER} ]] || [[ -z ${DEPLOY_HOST} ]] || [[ -z ${DEPLOY_PATH} ]]; then
@@ -240,9 +240,14 @@ fi
 echo
 
 # 6. Cleanup
-echo "6. Cleaning up build directory..."
-rm -rf "${BUILD_DIR}"
-echo "Build directory removed"
+if [[ ${DEPLOY_METHOD} == "ci-cd" ]] || [[ ${DEPLOY_METHOD} == "none" ]]; then
+	echo "6. Skipping cleanup (artifact preservation for CI/CD)"
+	echo "Build directory preserved: ${BUILD_DIR}"
+else
+	echo "6. Cleaning up build directory..."
+	rm -rf "${BUILD_DIR}"
+	echo "Build directory removed"
+fi
 
 echo
 echo "--- Pipeline Complete ---"
