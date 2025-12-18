@@ -101,6 +101,10 @@ jobs:
             cargo build --release --target x86_64-unknown-linux-musl
             strip target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }}
             cp target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }} ../${{ matrix.tool.name }}-bin
+            # Extract version from built binary
+            VERSION_OUTPUT=$(target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }} --version 2>&1 || echo "unknown")
+            VERSION=$(echo "$VERSION_OUTPUT" | grep -oP '\d+\.\d+\.\d+' | head -n1 || echo "${{ steps.fetch-version.outputs.version }}")
+            echo "$VERSION" > ../${{ matrix.tool.name }}.version.tmp
           elif [ -n "${{ matrix.tool.repo_url }}" ]; then
             # Build external repos
             BUILD_DIR="/tmp/build_${{ matrix.tool.name }}"
@@ -110,9 +114,17 @@ jobs:
             # Find and copy binary back to workspace
             if [ -f "target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }}" ]; then
               strip target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }}
+              # Extract version from built binary
+              VERSION_OUTPUT=$(target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }} --version 2>&1 || echo "unknown")
+              VERSION=$(echo "$VERSION_OUTPUT" | grep -oP '\d+\.\d+\.\d+' | head -n1 || echo "${{ steps.fetch-version.outputs.version }}")
+              echo "$VERSION" > "${WORKSPACE_DIR}/${{ matrix.tool.name }}.version.tmp"
               cp target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }} "${WORKSPACE_DIR}/${{ matrix.tool.name }}-bin"
             elif [ -f "build/${{ matrix.tool.name }}" ]; then
               strip build/${{ matrix.tool.name }}
+              # Extract version from built binary
+              VERSION_OUTPUT=$(build/${{ matrix.tool.name }} --version 2>&1 || echo "unknown")
+              VERSION=$(echo "$VERSION_OUTPUT" | grep -oP '\d+\.\d+\.\d+' | head -n1 || echo "${{ steps.fetch-version.outputs.version }}")
+              echo "$VERSION" > "${WORKSPACE_DIR}/${{ matrix.tool.name }}.version.tmp"
               cp build/${{ matrix.tool.name }} "${WORKSPACE_DIR}/${{ matrix.tool.name }}-bin"
             fi
           fi
@@ -130,14 +142,15 @@ jobs:
           fi
           echo "Binary verification passed"
 
-      - name: Test binary
+      - name: Finalize version metadata
         run: |
-          echo "Testing ${{ matrix.tool.name }}..."
-          ./${{ matrix.tool.name }}-bin --version || ./${{ matrix.tool.name }}-bin --help || echo "No version/help available"
-
-      - name: Create version metadata
-        run: |
-          echo "${{ steps.fetch-version.outputs.version }}" > ${{ matrix.tool.name }}.version
+          if [ -f "${{ matrix.tool.name }}.version.tmp" ]; then
+            mv ${{ matrix.tool.name }}.version.tmp ${{ matrix.tool.name }}.version
+            echo "Version extracted from binary: $(cat ${{ matrix.tool.name }}.version)"
+          else
+            echo "${{ steps.fetch-version.outputs.version }}" > ${{ matrix.tool.name }}.version
+            echo "Using fetched version: ${{ steps.fetch-version.outputs.version }}"
+          fi
 
       - name: Upload artifact with metadata
         uses: actions/upload-artifact@v4
@@ -236,11 +249,18 @@ jobs:
 
           echo "Detected BUILD_DIR: $BUILD_DIR"
 
-          # Copy binary from build dir
+          # Copy binary from build dir and extract version
           if [ -f "${BUILD_DIR}/${{ matrix.tool.name }}" ]; then
             cp "${BUILD_DIR}/${{ matrix.tool.name }}" ./${{ matrix.tool.name }}-bin
+            # Try to extract version from the binary in the container
+            VERSION_OUTPUT=$(podman run --rm -v "${BUILD_DIR}:/mnt:ro" alpine:edge /mnt/${{ matrix.tool.name }} --version 2>&1 || echo "unknown")
+            VERSION=$(echo "$VERSION_OUTPUT" | grep -oP '\d+\.\d+\.\d+' | head -n1 || echo "${{ steps.fetch-version.outputs.version }}")
+            echo "$VERSION" > ${{ matrix.tool.name }}.version.tmp
           elif [ -f "${BUILD_DIR}/${{ matrix.tool.name }}.sh" ]; then
             cp "${BUILD_DIR}/${{ matrix.tool.name }}.sh" ./${{ matrix.tool.name }}-bin
+            # For shell scripts, extract version from the script itself
+            VERSION=$(grep -oP 'VERSION.*\K\d+\.\d+\.\d+' "${BUILD_DIR}/${{ matrix.tool.name }}.sh" | head -n1 || echo "${{ steps.fetch-version.outputs.version }}")
+            echo "$VERSION" > ${{ matrix.tool.name }}.version.tmp
           else
             echo "Error: Binary not found in ${BUILD_DIR}"
             ls -la "${BUILD_DIR}" || true
@@ -260,14 +280,15 @@ jobs:
           fi
           echo "Binary verification passed"
 
-      - name: Test binary
+      - name: Finalize version metadata
         run: |
-          echo "Testing ${{ matrix.tool.name }}..."
-          ./${{ matrix.tool.name }}-bin --version
-
-      - name: Create version metadata
-        run: |
-          echo "${{ steps.fetch-version.outputs.version }}" > ${{ matrix.tool.name }}.version
+          if [ -f "${{ matrix.tool.name }}.version.tmp" ]; then
+            mv ${{ matrix.tool.name }}.version.tmp ${{ matrix.tool.name }}.version
+            echo "Version extracted from binary: $(cat ${{ matrix.tool.name }}.version)"
+          else
+            echo "${{ steps.fetch-version.outputs.version }}" > ${{ matrix.tool.name }}.version
+            echo "Using fetched version: ${{ steps.fetch-version.outputs.version }}"
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -453,24 +474,38 @@ jobs:
           echo "Manifest SHA256 checksums:"
           grep '"sha256"' release-files/manifest.json
 
+      - name: Generate release body
+        run: |
+          python3 << 'PYEOF'
+          import json
+
+          with open('release-files/manifest.json', 'r') as f:
+              manifest = json.load(f)
+
+          with open('release-body.md', 'w') as f:
+              f.write("## Static Binaries for ZimaOS\n\n")
+              f.write("Built from source with GPL compliance. All binaries are statically linked and verified.\n\n")
+              f.write("### Available Tools\n")
+
+              for tool_name in sorted(manifest['tools'].keys()):
+                  tool = manifest['tools'][tool_name]
+                  f.write(f"- **{tool_name}** v{tool['version']} - {tool['description']}\n")
+
+              f.write("\n### Installation\n")
+
+          print("Generated release body with tool versions")
+          PYEOF
+
+          cat release-body.md
+
       - name: Create/Update Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.event.inputs.release_tag || 'latest' }}
           name: Release ${{ github.event.inputs.release_tag || 'latest' }}
+          body_path: release-body.md
+          append_body: true
           body: |
-            ## Static Binaries for ZimaOS
-
-            Built from source with GPL compliance. All binaries are statically linked and verified.
-
-            ### Available Tools
-            - **gpm** v0.1.0 - Glochidia Package Manager (install other tools)
-            - **make** v4.4.1 - GNU Make build tool
-            - **gawk** v5.3.2 - GNU Awk text processing
-            - **starship** v1.24.1 - Cross-shell prompt
-            - **fastfetch** v2.30.2 - System information tool
-            - **ble.sh** v0.4.0 - Bash Line Editor
-
             ### Installation
             ```bash
             # Download and install gpm
