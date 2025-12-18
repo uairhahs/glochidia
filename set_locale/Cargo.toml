@@ -1,8 +1,0 @@
-[package]
-name = "set_locale"
-version = "0.1.0"
-edition = "2021"
-
-[[bin]]
-name = "set_locale"
-path = "src/main.rs"
