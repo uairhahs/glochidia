@@ -145,13 +145,22 @@ fn install_single_tool(
         // Try to get current version
         if let Ok(current_version) = get_installed_version(&dest) {
             if current_version == tool.version {
-                println!("Tool '{}' v{} is already up to date", tool_name, tool.version);
+                println!(
+                    "Tool '{}' v{} is already up to date",
+                    tool_name, tool.version
+                );
                 return Ok(InstallResult::Skipped);
             } else {
-                println!("Upgrading {} from v{} to v{}", tool_name, current_version, tool.version);
+                println!(
+                    "Upgrading {} from v{} to v{}",
+                    tool_name, current_version, tool.version
+                );
             }
         } else {
-            println!("Reinstalling {} v{} (version check failed)", tool_name, tool.version);
+            println!(
+                "Reinstalling {} v{} (version check failed)",
+                tool_name, tool.version
+            );
         }
 
         // Remove existing binary for upgrade
@@ -161,7 +170,11 @@ fn install_single_tool(
         false
     };
 
-    let action = if is_upgrade { "Upgrading" } else { "Installing" };
+    let action = if is_upgrade {
+        "Upgrading"
+    } else {
+        "Installing"
+    };
     println!("{} {} v{}", action, tool_name, tool.version);
     println!("  License: {}", tool.license);
     println!("  Size: {} bytes", tool.size);
@@ -176,7 +189,11 @@ fn install_single_tool(
     permissions.set_mode(0o755);
     fs::set_permissions(&dest, permissions)?;
 
-    let result = if is_upgrade { InstallResult::Upgraded } else { InstallResult::Installed };
+    let result = if is_upgrade {
+        InstallResult::Upgraded
+    } else {
+        InstallResult::Installed
+    };
     let action_past = if is_upgrade { "upgraded" } else { "installed" };
     println!("Successfully {} {} to {:?}", action_past, tool_name, dest);
     Ok(result)
@@ -210,7 +227,8 @@ fn extract_version_number(text: &str) -> Option<String> {
             let cleaned = word.trim_start_matches('v');
             if cleaned.chars().next()?.is_ascii_digit() && cleaned.contains('.') {
                 // Basic validation - starts with digit and contains dot
-                let version_part: String = cleaned.chars()
+                let version_part: String = cleaned
+                    .chars()
                     .take_while(|c| c.is_ascii_digit() || *c == '.' || *c == '-')
                     .collect();
                 if !version_part.is_empty() {
