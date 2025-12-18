@@ -19,10 +19,10 @@ pub fn execute(cli: Cli) -> Result<()> {
     )?;
 
     match cli.command {
-        Commands::Install { tool_names } => install::run(&config, &tool_names),
+        Commands::Install { tool_names, all } => install::run(&config, &tool_names, all),
         Commands::List => list::run(&config),
         Commands::ListRemote => list_remote::run(&config),
-        Commands::Remove { tool_name } => remove::run(&config, &tool_name),
+        Commands::Remove { tool_names, all } => remove::run(&config, &tool_names, all),
         Commands::Update => update::run(&config),
 
         Commands::SetupPath => setup_path::run(&config),
