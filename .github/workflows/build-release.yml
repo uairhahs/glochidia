@@ -29,6 +29,20 @@ jobs:
             license: "GPL-2.0-or-later"
             source_url: "https://github.com/${{ github.repository }}"
             working_dir: gpm
+          - name: starship
+            version: "1.24.1"
+            description: "Cross-shell prompt"
+            license: "ISC"
+            source_url: "https://github.com/starship/starship"
+            repo_url: "https://github.com/starship/starship"
+            build_cmd: "cargo build --release --target x86_64-unknown-linux-musl --no-default-features --features battery"
+          - name: fastfetch
+            version: "2.30.2"
+            description: "System information tool"
+            license: "MIT"
+            source_url: "https://github.com/fastfetch-cli/fastfetch"
+            repo_url: "https://github.com/fastfetch-cli/fastfetch"
+            build_cmd: "cmake -B build -DCMAKE_BUILD_TYPE=Release -DENABLE_SYSTEM_YYJSON=OFF -DENABLE_DIRECTWRITE=OFF -DENABLE_XRANDR=OFF -DENABLE_X11=OFF -DENABLE_WAYLAND=OFF -DENABLE_GIO=OFF -DENABLE_DCONF=OFF -DENABLE_DBUS=OFF -DENABLE_XFCONF=OFF -DENABLE_SQLITE3=OFF -DENABLE_IMAGEMAGICK=OFF -DENABLE_CHAFA=OFF -DENABLE_ZLIB=OFF -DENABLE_EGL=OFF -DENABLE_GLX=OFF -DENABLE_OSMESA=OFF -DENABLE_OPENCL=OFF -DENABLE_VULKAN=OFF -DENABLE_RPM=OFF -DENABLE_DRM=OFF -DENABLE_FREETYPE=OFF && cmake --build build --target fastfetch"
     container:
       image: rust:alpine
     steps:
@@ -65,12 +79,28 @@ jobs:
           key: ${{ runner.os }}-cargo-build-${{ matrix.tool.name }}-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build ${{ matrix.tool.name }}
-        working-directory: ${{ matrix.tool.working_dir }}
         run: |
           echo "Building ${{ matrix.tool.name }}..."
-          cargo build --release --target x86_64-unknown-linux-musl
-          strip target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }}
-          cp target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }} ../${{ matrix.tool.name }}-bin
+          if [ -n "${{ matrix.tool.working_dir }}" ]; then
+            cd ${{ matrix.tool.working_dir }}
+            cargo build --release --target x86_64-unknown-linux-musl
+            strip target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }}
+            cp target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }} ../${{ matrix.tool.name }}-bin
+          elif [ -n "${{ matrix.tool.repo_url }}" ]; then
+            # Use grow_glochidium.sh for external repos
+            BUILD_DIR="/tmp/build_${{ matrix.tool.name }}"
+            git clone ${{ matrix.tool.repo_url }} ${BUILD_DIR}
+            cd ${BUILD_DIR}
+            eval "${{ matrix.tool.build_cmd }}"
+            # Find and copy binary
+            if [ -f "target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }}" ]; then
+              strip target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }}
+              cp target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }} /github/workspace/${{ matrix.tool.name }}-bin
+            elif [ -f "build/${{ matrix.tool.name }}" ]; then
+              strip build/${{ matrix.tool.name }}
+              cp build/${{ matrix.tool.name }} /github/workspace/${{ matrix.tool.name }}-bin
+            fi
+          fi
 
       - name: Verify static binary
         run: |
@@ -107,47 +137,58 @@ jobs:
             license: "GPL-3.0-or-later"
             source_url: "https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz"
             source_sha256: "dd16fb1d67bfab79a72f5e8390735c49e3e8e70b4945a15ab1f81ddb78658fb3"
-            build_cmd: |
-              wget -q $SOURCE_URL
-              tar xzf $(basename $SOURCE_URL)
-              cd make-$VERSION
-              ./configure LDFLAGS="-static"
-              make -j$(nproc)
-              strip make
-              cp make ../../$NAME-bin
+            build_cmd: "./configure LDFLAGS=-static && make -j$(nproc)"
           - name: gawk
             version: "5.3.2"
             description: "GNU Awk text processing"
             license: "GPL-3.0-or-later"
             source_url: "https://ftp.gnu.org/gnu/gawk/gawk-5.3.2.tar.xz"
             source_sha256: "3203e52edb182061ac4fe37f0040e8d5b5ed5d37e1c8a1dcf5d8288d0c757cd5"
-            build_cmd: |
-              wget -q $SOURCE_URL
-              tar xJf $(basename $SOURCE_URL)
-              cd gawk-$VERSION
-              ./configure LDFLAGS="-static"
-              make -j$(nproc)
-              strip gawk
-              cp gawk ../../$NAME-bin
-    container:
-      image: alpine:latest
+            build_cmd: "./configure LDFLAGS=-static && make -j$(nproc)"
+          - name: ble.sh
+            version: "0.4.0"
+            description: "Bash Line Editor"
+            license: "BSD-3-Clause"
+            source_url: "https://github.com/akinomyoga/ble.sh"
+            build_cmd: "make"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install build dependencies
-        run: apk add --no-cache build-base wget xz file bash
+      - name: Install podman
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y podman
 
       - name: Build ${{ matrix.tool.name }}
-        env:
-          NAME: ${{ matrix.tool.name }}
-          VERSION: ${{ matrix.tool.version }}
-          SOURCE_URL: ${{ matrix.tool.source_url }}
         run: |
-          echo "Building ${{ matrix.tool.name }} ${{ matrix.tool.version }}..."
-          mkdir -p build
-          cd build
-          ${{ matrix.tool.build_cmd }}
+          # Modify grow_glochidium.sh to export binary before cleanup
+          BUILD_PID=$$
+          BUILD_DIR="/tmp/glochidium_build_${BUILD_PID}"
+
+          # Set up environment for grow_glochidium.sh
+          export CONTAINER_RUNTIME=podman
+          export DEPLOY_METHOD=none
+          export DEPLOY_USER=ci
+          export DEPLOY_HOST=localhost
+          export DEPLOY_PATH=/tmp/ci
+
+          # Run the build script (it will fail at deployment but that's ok)
+          bash grow_glochidium.sh \
+            "${{ matrix.tool.source_url }}" \
+            "${{ matrix.tool.name }}" \
+            "${{ matrix.tool.build_cmd }}" || true
+
+          # Copy binary from build dir before it's cleaned up
+          if [ -f "${BUILD_DIR}/${{ matrix.tool.name }}" ]; then
+            cp "${BUILD_DIR}/${{ matrix.tool.name }}" ./${{ matrix.tool.name }}-bin
+          elif [ -f "${BUILD_DIR}/${{ matrix.tool.name }}.sh" ]; then
+            cp "${BUILD_DIR}/${{ matrix.tool.name }}.sh" ./${{ matrix.tool.name }}-bin
+          else
+            echo "Error: Binary not found in ${BUILD_DIR}"
+            ls -la "${BUILD_DIR}" || true
+            exit 1
+          fi
 
       - name: Verify static binary
         run: |
@@ -248,6 +289,27 @@ jobs:
                   "source_url": "https://ftp.gnu.org/gnu/gawk/gawk-5.3.2.tar.xz",
                   "source_sha256": "3203e52edb182061ac4fe37f0040e8d5b5ed5d37e1c8a1dcf5d8288d0c757cd5",
                   "build_type": "alpine"
+              },
+              "starship": {
+                  "version": "1.24.1",
+                  "description": "Cross-shell prompt",
+                  "license": "ISC",
+                  "source_url": "https://github.com/starship/starship",
+                  "build_type": "rust-alpine"
+              },
+              "fastfetch": {
+                  "version": "2.30.2",
+                  "description": "System information tool",
+                  "license": "MIT",
+                  "source_url": "https://github.com/fastfetch-cli/fastfetch",
+                  "build_type": "alpine"
+              },
+              "ble.sh": {
+                  "version": "0.4.0",
+                  "description": "Bash Line Editor",
+                  "license": "BSD-3-Clause",
+                  "source_url": "https://github.com/akinomyoga/ble.sh",
+                  "build_type": "script"
               }
           }
 
@@ -321,6 +383,9 @@ jobs:
             - **gpm** v0.1.0 - Glochidia Package Manager (install other tools)
             - **make** v4.4.1 - GNU Make build tool
             - **gawk** v5.3.2 - GNU Awk text processing
+            - **starship** v1.24.1 - Cross-shell prompt
+            - **fastfetch** v2.30.2 - System information tool
+            - **ble.sh** v0.4.0 - Bash Line Editor
 
             ### Installation
             ```bash
