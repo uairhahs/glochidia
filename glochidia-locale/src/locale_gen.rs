@@ -146,9 +146,14 @@ fn main() {
                 println!("\nGenerate locales based on /etc/locale.gen configuration");
                 println!("\nOptions:");
                 println!("  -h, --help          Show this help message");
+                println!("  -v, --version       Show version information");
                 println!("  -l, --list          List available locale definitions");
                 println!("  --init              Create default /etc/locale.gen file");
                 println!("\nWithout options, generates all locales listed in /etc/locale.gen");
+                exit(0);
+            }
+            "-v" | "--version" => {
+                println!("locale-gen {}", env!("CARGO_PKG_VERSION"));
                 exit(0);
             }
             "-l" | "--list" => {

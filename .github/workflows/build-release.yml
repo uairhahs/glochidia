@@ -115,11 +115,13 @@ jobs:
               strip target/x86_64-unknown-linux-musl/release/locale-gen
               cp target/x86_64-unknown-linux-musl/release/set_locale ../set_locale-bin
               cp target/x86_64-unknown-linux-musl/release/locale-gen ../locale-gen-bin
-              # Extract version from set_locale binary
+              # Extract version from binaries (both should report same package version)
               VERSION_OUTPUT=$(target/x86_64-unknown-linux-musl/release/set_locale --version 2>&1 || echo "unknown")
               VERSION=$(echo "$VERSION_OUTPUT" | grep -oP '\d+\.\d+\.\d+' | head -n1 || echo "${{ steps.fetch-version.outputs.version }}")
               echo "$VERSION" > ../set_locale.version.tmp
               echo "$VERSION" > ../locale-gen.version.tmp
+              # Also create glochidia-locale.version.tmp for standard handling
+              echo "$VERSION" > ../glochidia-locale.version.tmp
             else
               strip target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }}
               cp target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }} ../${{ matrix.tool.name }}-bin
@@ -175,10 +177,6 @@ jobs:
             echo "${{ steps.fetch-version.outputs.version }}" > ${{ matrix.tool.name }}.version
             echo "Using fetched version: ${{ steps.fetch-version.outputs.version }}"
           fi
-
-      - name: Create version metadata
-        run: |
-          echo "${{ steps.fetch-version.outputs.version }}" > ${{ matrix.tool.name }}.version
 
       - name: Upload artifact with metadata
         uses: actions/upload-artifact@v4
@@ -307,14 +305,17 @@ jobs:
           if [ -f "${{ matrix.tool.name }}.version.tmp" ]; then
             mv ${{ matrix.tool.name }}.version.tmp ${{ matrix.tool.name }}.version
             echo "Version extracted from binary: $(cat ${{ matrix.tool.name }}.version)"
+            # Handle additional binaries for glochidia-locale
+            if [ -f "set_locale.version.tmp" ]; then
+              mv set_locale.version.tmp set_locale.version
+              mv locale-gen.version.tmp locale-gen.version
+              echo "Version extracted for set_locale: $(cat set_locale.version)"
+              echo "Version extracted for locale-gen: $(cat locale-gen.version)"
+            fi
           else
             echo "${{ steps.fetch-version.outputs.version }}" > ${{ matrix.tool.name }}.version
             echo "Using fetched version: ${{ steps.fetch-version.outputs.version }}"
           fi
-
-      - name: Create version metadata
-        run: |
-          echo "${{ steps.fetch-version.outputs.version }}" > ${{ matrix.tool.name }}.version
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
