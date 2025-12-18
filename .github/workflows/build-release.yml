@@ -53,57 +53,73 @@ jobs:
       - name: Install GNU tar for caching
         run: apk add --no-cache tar
 
+      - name: Cache compiled binary
+        id: cache-binary
+        uses: actions/cache@v4
+        with:
+          path: ${{ matrix.tool.name }}-bin
+          key: ${{ runner.os }}-binary-${{ matrix.tool.name }}-${{ matrix.tool.version }}-musl
+
       - name: Install build dependencies
+        if: steps.cache-binary.outputs.cache-hit != 'true'
         run: apk add --no-cache musl-dev file git cmake make gcc g++ linux-headers
 
       - name: Prepare cache directories
+        if: steps.cache-binary.outputs.cache-hit != 'true'
         run: |
           mkdir -p ~/.cargo/registry ~/.cargo/git
           mkdir -p ${{ matrix.tool.working_dir }}/target
 
       - name: Cache cargo registry
+        if: steps.cache-binary.outputs.cache-hit != 'true'
         uses: actions/cache@v4
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Cache cargo index
+        if: steps.cache-binary.outputs.cache-hit != 'true'
         uses: actions/cache@v4
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Cache cargo build
+        if: steps.cache-binary.outputs.cache-hit != 'true'
         uses: actions/cache@v4
         with:
-          path: ${{ matrix.tool.working_dir }}/target
-          key: ${{ runner.os }}-cargo-build-${{ matrix.tool.name }}-${{ hashFiles('**/Cargo.lock') }}
+          path: |
+            ${{ matrix.tool.working_dir }}/target
+            /tmp/build_${{ matrix.tool.name }}/target
+          key: ${{ runner.os }}-cargo-build-${{ matrix.tool.name }}-${{ matrix.tool.version }}-musl
 
       - name: Build ${{ matrix.tool.name }}
         run: |
           echo "Building ${{ matrix.tool.name }}..."
+          WORKSPACE_DIR="$(pwd)"
           if [ -n "${{ matrix.tool.working_dir }}" ]; then
             cd ${{ matrix.tool.working_dir }}
             cargo build --release --target x86_64-unknown-linux-musl
             strip target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }}
             cp target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }} ../${{ matrix.tool.name }}-bin
           elif [ -n "${{ matrix.tool.repo_url }}" ]; then
-            # Use grow_glochidium.sh for external repos
+            # Build external repos
             BUILD_DIR="/tmp/build_${{ matrix.tool.name }}"
             git clone ${{ matrix.tool.repo_url }} ${BUILD_DIR}
             cd ${BUILD_DIR}
             eval "${{ matrix.tool.build_cmd }}"
-            # Find and copy binary
+            # Find and copy binary back to workspace
             if [ -f "target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }}" ]; then
               strip target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }}
-              cp target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }} /github/workspace/${{ matrix.tool.name }}-bin
+              cp target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }} "${WORKSPACE_DIR}/${{ matrix.tool.name }}-bin"
             elif [ -f "build/${{ matrix.tool.name }}" ]; then
               strip build/${{ matrix.tool.name }}
-              cp build/${{ matrix.tool.name }} /github/workspace/${{ matrix.tool.name }}-bin
+              cp build/${{ matrix.tool.name }} "${WORKSPACE_DIR}/${{ matrix.tool.name }}-bin"
             fi
           fi
 
       - name: Verify static binary
+        if: steps.cache-binary.outputs.cache-hit != 'true'
         run: |
           echo "Verifying ${{ matrix.tool.name }} is statically linked..."
           file ${{ matrix.tool.name }}-bin
@@ -157,12 +173,21 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Cache compiled binary
+        id: cache-binary
+        uses: actions/cache@v4
+        with:
+          path: ${{ matrix.tool.name }}-bin
+          key: ${{ runner.os }}-binary-${{ matrix.tool.name }}-${{ matrix.tool.version }}-musl-static
+
       - name: Install podman
+        if: steps.cache-binary.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y podman
 
       - name: Build ${{ matrix.tool.name }}
+        if: steps.cache-binary.outputs.cache-hit != 'true'
         run: |
           # Set up environment for grow_glochidium.sh
           export CONTAINER_RUNTIME=podman
@@ -201,6 +226,7 @@ jobs:
           fi
 
       - name: Verify static binary
+        if: steps.cache-binary.outputs.cache-hit != 'true'
         run: |
           echo "Verifying ${{ matrix.tool.name }} is statically linked..."
           file ${{ matrix.tool.name }}-bin
