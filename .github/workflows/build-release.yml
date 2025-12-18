@@ -9,8 +9,6 @@ on:
         required: true
         default: "latest"
   push:
-    branches:
-      - "test/**" # Remove after testing
     tags:
       - "v*"
 
@@ -83,10 +81,6 @@ jobs:
       - name: Build ${{ matrix.tool.name }}
         run: |
           echo "Building ${{ matrix.tool.name }}..."
-          # Ensure git and cmake are available
-          command -v git >/dev/null 2>&1 || apk add --no-cache git
-          command -v cmake >/dev/null 2>&1 || apk add --no-cache cmake
-
           if [ -n "${{ matrix.tool.working_dir }}" ]; then
             cd ${{ matrix.tool.working_dir }}
             cargo build --release --target x86_64-unknown-linux-musl
