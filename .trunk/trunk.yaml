@@ -25,6 +25,10 @@ lint:
   disabled:
     - checkov
   enabled:
+    - actionlint@1.7.9
+    - clippy@1.65.0
+    - rustfmt@1.65.0
+    - taplo@0.10.0
     - yamllint@1.37.1
     - git-diff-check
     - markdownlint@0.47.0

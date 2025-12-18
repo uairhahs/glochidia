@@ -4,7 +4,6 @@ mod list_remote;
 mod remove;
 mod setup_path;
 mod update;
-mod upgrade;
 
 use anyhow::Result;
 
@@ -20,12 +19,12 @@ pub fn execute(cli: Cli) -> Result<()> {
     )?;
 
     match cli.command {
-        Commands::Install { tool_name } => install::run(&config, &tool_name),
+        Commands::Install { tool_names } => install::run(&config, &tool_names),
         Commands::List => list::run(&config),
         Commands::ListRemote => list_remote::run(&config),
         Commands::Remove { tool_name } => remove::run(&config, &tool_name),
         Commands::Update => update::run(&config),
-        Commands::Upgrade { tool_name } => upgrade::run(&config, &tool_name),
+
         Commands::SetupPath => setup_path::run(&config),
     }
 }
