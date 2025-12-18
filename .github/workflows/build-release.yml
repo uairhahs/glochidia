@@ -323,6 +323,19 @@ jobs:
             curl -sS https://www.gnu.org/licenses/gpl-3.0.txt -o licenses/GPL-3.0.txt
           fi
 
+      - name: Build ZimaOS RAW package
+        run: |
+          sudo apt-get update && sudo apt-get install -y squashfs-tools
+          bash zpkg/build-zpkg.sh
+          cp gpm.raw release-files/
+          echo "Added gpm.raw to release files"
+
+      - name: Copy compliance files
+        run: |
+          cp SOURCES.txt release-files/
+          cp COPYING release-files/
+          cp -r licenses release-files/
+
       - name: Generate manifest with Python
         run: |
           python3 << 'PYEOF'
@@ -433,20 +446,12 @@ jobs:
           print(json.dumps(manifest, indent=2))
           PYEOF
 
-      - name: Copy compliance files
-        run: |
-          cp SOURCES.txt release-files/
-          cp COPYING release-files/
-          cp -r licenses release-files/
-          echo "Release files:"
+          echo ""
+          echo "Final release files:"
           ls -lh release-files/
-
-      - name: Build ZimaOS RAW package
-        run: |
-          sudo apt-get update && sudo apt-get install -y squashfs-tools
-          bash zpkg/build-zpkg.sh
-          cp gpm.raw release-files/
-          echo "Added gpm.raw to release files"
+          echo ""
+          echo "Manifest SHA256 checksums:"
+          grep '"sha256"' release-files/manifest.json
 
       - name: Create/Update Release
         uses: softprops/action-gh-release@v1
