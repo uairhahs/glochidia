@@ -13,7 +13,6 @@ fn main() {
 
     let locale = &args[1];
 
-    // Set locale environment variables
     let locale_vars = [
         "LANG",
         "LC_ALL",
@@ -31,18 +30,16 @@ fn main() {
         "LC_IDENTIFICATION",
     ];
 
-    println!("Setting locale to: {}", locale);
+    eprintln!("Setting locale to: {}", locale);
 
-    // Write to /etc/locale.conf if writable
     if let Ok(_) = fs::write("/etc/locale.conf", format!("LANG={}\n", locale)) {
-        println!("Updated /etc/locale.conf");
+        eprintln!("Updated /etc/locale.conf");
     }
 
-    // Export for current session
     for var in &locale_vars {
         env::set_var(var, locale);
         println!("export {}={}", var, locale);
     }
 
-    println!("Locale set successfully. Restart shell or source profile to apply.");
+    eprintln!("Locale set successfully. Restart shell or source profile to apply.");
 }
