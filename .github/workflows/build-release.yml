@@ -162,10 +162,6 @@ jobs:
 
       - name: Build ${{ matrix.tool.name }}
         run: |
-          # Modify grow_glochidium.sh to export binary before cleanup
-          BUILD_PID=$$
-          BUILD_DIR="/tmp/glochidium_build_${BUILD_PID}"
-
           # Set up environment for grow_glochidium.sh
           export CONTAINER_RUNTIME=podman
           export DEPLOY_METHOD=ci-cd
@@ -173,13 +169,25 @@ jobs:
           export DEPLOY_HOST=localhost
           export DEPLOY_PATH=/tmp/ci
 
-          # Run the build script (it will fail at deployment but that's ok)
-          bash grow_glochidium.sh \
+          # Run the build script and capture output to extract BUILD_DIR
+          OUTPUT=$(bash grow_glochidium.sh \
             "${{ matrix.tool.source_url }}" \
             "${{ matrix.tool.name }}" \
-            "${{ matrix.tool.build_cmd }}" || true
+            "${{ matrix.tool.build_cmd }}" 2>&1)
 
-          # Copy binary from build dir before it's cleaned up
+          echo "$OUTPUT"
+
+          # Extract the actual BUILD_DIR from the script output
+          BUILD_DIR=$(echo "$OUTPUT" | grep "Build directory preserved:" | sed 's/.*Build directory preserved: //')
+
+          if [ -z "$BUILD_DIR" ]; then
+            echo "Error: Could not determine BUILD_DIR from script output"
+            exit 1
+          fi
+
+          echo "Detected BUILD_DIR: $BUILD_DIR"
+
+          # Copy binary from build dir
           if [ -f "${BUILD_DIR}/${{ matrix.tool.name }}" ]; then
             cp "${BUILD_DIR}/${{ matrix.tool.name }}" ./${{ matrix.tool.name }}-bin
           elif [ -f "${BUILD_DIR}/${{ matrix.tool.name }}.sh" ]; then
