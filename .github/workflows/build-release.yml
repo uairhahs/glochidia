@@ -109,10 +109,24 @@ jobs:
             cargo build --release --target x86_64-unknown-linux-musl
             strip target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }}
             cp target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }} ../${{ matrix.tool.name }}-bin
-            # Extract version from built binary
-            VERSION_OUTPUT=$(target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }} --version 2>&1 || echo "unknown")
+
+            # Extract version from built binary with multiple fallback patterns
+            VERSION_OUTPUT=$(target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }} --version 2>&1 || echo "")
+
+            # Try strict X.Y.Z pattern first
             VERSION=$(echo "$VERSION_OUTPUT" | sed -n 's/.*\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p' | head -n1)
+
+            # If no match, try looser pattern (any number sequence with dots)
+            if [ -z "$VERSION" ]; then
+              VERSION=$(echo "$VERSION_OUTPUT" | grep -o -E "([0-9]+\.?)+[0-9]+" | head -1)
+            fi
+
+            # Remove 'v' prefix if present
+            VERSION=$(echo "$VERSION" | sed 's/^v//')
+
+            # Use repo version as final fallback
             echo "${VERSION:-${{ env.REPO_VERSION }}}" > ../${{ matrix.tool.name }}.version
+            echo "Version extracted for ${{ matrix.tool.name }}: ${VERSION:-${{ env.REPO_VERSION }}}"
           elif [ -n "${{ matrix.tool.repo_url }}" ]; then
             # Build external repos
             BUILD_DIR="/tmp/build_${{ matrix.tool.name }}"
@@ -123,11 +137,28 @@ jobs:
             BINARY_NAME="${{ matrix.tool.binary_name || matrix.tool.name }}"
             if [ -f "target/x86_64-unknown-linux-musl/release/${BINARY_NAME}" ]; then
               strip target/x86_64-unknown-linux-musl/release/${BINARY_NAME}
-              # Extract version from built binary
-              VERSION_OUTPUT=$(target/x86_64-unknown-linux-musl/release/${BINARY_NAME} --version 2>&1 || echo "unknown")
+
+              # Extract version from built binary with multiple fallback patterns
+              VERSION_OUTPUT=$(target/x86_64-unknown-linux-musl/release/${BINARY_NAME} --version 2>&1 || echo "")
+
+              # Try strict X.Y.Z pattern first
               VERSION=$(echo "$VERSION_OUTPUT" | sed -n 's/.*\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p' | head -n1)
-              echo "${VERSION:-${{ steps.fetch-version.outputs.version }}}" > "${{ matrix.tool.name }}.version"
+
+              # If no match, try looser pattern (any number sequence with dots)
+              if [ -z "$VERSION" ]; then
+                VERSION=$(echo "$VERSION_OUTPUT" | grep -o -E "([0-9]+\.?)+[0-9]+" | head -1)
+              fi
+
+              # Remove 'v' prefix if present
+              VERSION=$(echo "$VERSION" | sed 's/^v//')
+
+              # Use fetched version as fallback, then repo version
+              echo "${VERSION:-${{ steps.fetch-version.outputs.version }}-${{ env.REPO_VERSION }}}" > "${{ matrix.tool.name }}.version"
+              echo "Version extracted for ${{ matrix.tool.name }}: ${VERSION:-${{ steps.fetch-version.outputs.version }}}"
               cp target/x86_64-unknown-linux-musl/release/${BINARY_NAME} "${{ matrix.tool.name }}-bin"
+            else
+              echo "Error: Binary not found at expected path"
+              exit 1
             fi
           fi
 
@@ -146,26 +177,35 @@ jobs:
 
       - name: Finalize version metadata
         run: |
-          if [ -f "${{ matrix.tool.name }}.version" ]; then
-            VERSION=$(cat ${{ matrix.tool.name }}.version | tr -d '\n\r' | xargs)
-            if [ -n "$VERSION" ] && [ "$VERSION" != "unknown" ]; then
-              echo "Version for ${{ matrix.tool.name }}: $VERSION"
+          VERSION_FILE="${{ matrix.tool.name }}.version"
+
+          # Ensure version file exists and is not empty
+          if [ ! -f "$VERSION_FILE" ]; then
+            # File doesn't exist, create with fallback
+            if [ -n "${{ matrix.tool.working_dir }}" ]; then
+              echo "${{ env.REPO_VERSION }}" > "$VERSION_FILE"
+              echo "Created version file for ${{ matrix.tool.name }} with repo version: ${{ env.REPO_VERSION }}"
             else
-              if [ -n "${{ matrix.tool.working_dir }}" ]; then
-                echo "${{ env.REPO_VERSION }}" > ${{ matrix.tool.name }}.version
-                echo "Using repo version for ${{ matrix.tool.name }}: ${{ env.REPO_VERSION }}"
-              else
-                echo "${{ steps.fetch-version.outputs.version }}" > ${{ matrix.tool.name }}.version
-                echo "Using fetched version for ${{ matrix.tool.name }}: ${{ steps.fetch-version.outputs.version }}"
-              fi
+              echo "${{ steps.fetch-version.outputs.version }}" > "$VERSION_FILE"
+              echo "Created version file for ${{ matrix.tool.name }} with fetched version: ${{ steps.fetch-version.outputs.version }}"
             fi
           else
-            if [ -n "${{ matrix.tool.working_dir }}" ]; then
-              echo "${{ env.REPO_VERSION }}" > ${{ matrix.tool.name }}.version
-              echo "Using repo version for ${{ matrix.tool.name }}: ${{ env.REPO_VERSION }}"
+            # File exists, clean it up and validate
+            VERSION=$(cat "$VERSION_FILE" | tr -d '\n\r' | xargs | sed 's/^v//')
+
+            if [ -z "$VERSION" ] || [ "$VERSION" = "unknown" ]; then
+              # Empty or unknown, use fallback
+              if [ -n "${{ matrix.tool.working_dir }}" ]; then
+                echo "${{ env.REPO_VERSION }}" > "$VERSION_FILE"
+                echo "Version file was empty, using repo version for ${{ matrix.tool.name }}: ${{ env.REPO_VERSION }}"
+              else
+                echo "${{ steps.fetch-version.outputs.version }}" > "$VERSION_FILE"
+                echo "Version file was empty, using fetched version for ${{ matrix.tool.name }}: ${{ steps.fetch-version.outputs.version }}"
+              fi
             else
-              echo "${{ steps.fetch-version.outputs.version }}" > ${{ matrix.tool.name }}.version
-              echo "Using fetched version for ${{ matrix.tool.name }}: ${{ steps.fetch-version.outputs.version }}"
+              # Valid version, write it back (cleaned)
+              echo "$VERSION" > "$VERSION_FILE"
+              echo "Version for ${{ matrix.tool.name }}: $VERSION"
             fi
           fi
 
@@ -201,6 +241,7 @@ jobs:
             license: "BSD-3-Clause"
             source_url: "https://github.com/akinomyoga/ble.sh"
             build_cmd: "make"
+            version: "0.4.0"
           - name: fastfetch
             description: "System information tool"
             license: "MIT"
@@ -224,8 +265,13 @@ jobs:
             echo "version=$LATEST_TAG" >> $GITHUB_OUTPUT
             echo "Latest version: $LATEST_TAG"
           else
-            echo "version=${{ matrix.tool.version }}" >> $GITHUB_OUTPUT
-            echo "Using configured version: ${{ matrix.tool.version }}"
+            # Use explicitly configured version or default fallback
+            CONFIGURED_VERSION="${{ matrix.tool.version }}"
+            if [ -z "$CONFIGURED_VERSION" ]; then
+              CONFIGURED_VERSION="unknown"
+            fi
+            echo "version=$CONFIGURED_VERSION" >> $GITHUB_OUTPUT
+            echo "Using configured version: $CONFIGURED_VERSION"
           fi
 
       - name: Install podman
@@ -260,23 +306,58 @@ jobs:
 
           echo "Detected BUILD_DIR: $BUILD_DIR"
 
+          # Initialize version variable
+          VERSION=""
+
           # Copy binary from build dir and extract version
           if [ -f "${BUILD_DIR}/${{ matrix.tool.name }}" ]; then
             cp "${BUILD_DIR}/${{ matrix.tool.name }}" ./${{ matrix.tool.name }}-bin
-            # Try to extract version from the binary in the container
-            VERSION_OUTPUT=$(podman run --rm -v "${BUILD_DIR}:/mnt:ro" alpine:edge /mnt/${{ matrix.tool.name }} --version 2>&1 || echo "unknown")
+            chmod +x ./${{ matrix.tool.name }}-bin
+
+            # Try to extract version from the binary
+            VERSION_OUTPUT=$(./${{ matrix.tool.name }}-bin --version 2>&1 || echo "")
+
+            # Try strict X.Y.Z pattern first
             VERSION=$(echo "$VERSION_OUTPUT" | sed -n 's/.*\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p' | head -n1)
-            echo "${VERSION:-${{ steps.fetch-version.outputs.version }}}" > ${{ matrix.tool.name }}.version
+
+            # If no match, try looser pattern
+            if [ -z "$VERSION" ]; then
+              VERSION=$(echo "$VERSION_OUTPUT" | grep -o -E "([0-9]+\.?)+[0-9]+" | head -1)
+            fi
+
+            # Remove 'v' prefix if present
+            VERSION=$(echo "$VERSION" | sed 's/^v//')
+
           elif [ -f "${BUILD_DIR}/${{ matrix.tool.name }}.sh" ]; then
             cp "${BUILD_DIR}/${{ matrix.tool.name }}.sh" ./${{ matrix.tool.name }}-bin
+            chmod +x ./${{ matrix.tool.name }}-bin
+
             # For shell scripts, extract version from the script itself
-            VERSION=$(grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' "${BUILD_DIR}/${{ matrix.tool.name }}.sh" | head -n1)
-            echo "${VERSION:-${{ steps.fetch-version.outputs.version }}}" > ${{ matrix.tool.name }}.version
+            VERSION=$(grep -o -E "([0-9]+\.?)+[0-9]+" "${BUILD_DIR}/${{ matrix.tool.name }}.sh" | head -n1)
+
+            # Remove 'v' prefix if present
+            VERSION=$(echo "$VERSION" | sed 's/^v//')
+
           else
             echo "Error: Binary not found in ${BUILD_DIR}"
             ls -la "${BUILD_DIR}" || true
             exit 1
           fi
+
+          # Ensure version file is created with appropriate fallback
+          if [ -z "$VERSION" ]; then
+            # No version extracted, use configured version or fetched version
+            if [ -n "${{ matrix.tool.version }}" ]; then
+              VERSION="${{ matrix.tool.version }}"
+            else
+              VERSION="${{ steps.fetch-version.outputs.version }}"
+            fi
+          fi
+
+          # Clean version and write to file
+          VERSION=$(echo "$VERSION" | tr -d '\n\r' | xargs | sed 's/^v//')
+          echo "$VERSION" > ${{ matrix.tool.name }}.version
+          echo "Version for ${{ matrix.tool.name }}: $VERSION"
 
       - name: Verify static binary
         run: |
@@ -293,30 +374,35 @@ jobs:
 
       - name: Finalize version metadata
         run: |
-          # Clean up version file if it exists, with better fallback handling
-          if [ -f "${{ matrix.tool.name }}.version" ]; then
-            VERSION=$(cat ${{ matrix.tool.name }}.version | tr -d '\n\r' | xargs)
-            if [ -n "$VERSION" ] && [ "$VERSION" != "unknown" ]; then
-              echo "$VERSION" > ${{ matrix.tool.name }}.version
-              echo "Version for ${{ matrix.tool.name }}: $VERSION"
+          VERSION_FILE="${{ matrix.tool.name }}.version"
+
+          # Ensure version file exists and is not empty
+          if [ ! -f "$VERSION_FILE" ]; then
+            # File doesn't exist, create with fallback
+            if [ -n "${{ matrix.tool.version }}" ]; then
+              echo "${{ matrix.tool.version }}" > "$VERSION_FILE"
+              echo "Created version file for ${{ matrix.tool.name }} with configured version: ${{ matrix.tool.version }}"
             else
-              # For local tools, use repo version; for external tools, use fetched version
-              if [ "${{ matrix.tool.working_dir }}" != "" ]; then
-                echo "${{ env.REPO_VERSION }}" > ${{ matrix.tool.name }}.version
-                echo "Using repo version for ${{ matrix.tool.name }}: ${{ env.REPO_VERSION }}"
-              else
-                echo "${{ steps.fetch-version.outputs.version }}" > ${{ matrix.tool.name }}.version
-                echo "Using fetched version for ${{ matrix.tool.name }}: ${{ steps.fetch-version.outputs.version }}"
-              fi
+              echo "${{ steps.fetch-version.outputs.version }}" > "$VERSION_FILE"
+              echo "Created version file for ${{ matrix.tool.name }} with fetched version: ${{ steps.fetch-version.outputs.version }}"
             fi
           else
-            # For local tools, use repo version; for external tools, use fetched version
-            if [ "${{ matrix.tool.working_dir }}" != "" ]; then
-              echo "${{ env.REPO_VERSION }}" > ${{ matrix.tool.name }}.version
-              echo "Using repo version for ${{ matrix.tool.name }}: ${{ env.REPO_VERSION }}"
+            # File exists, clean it up and validate
+            VERSION=$(cat "$VERSION_FILE" | tr -d '\n\r' | xargs | sed 's/^v//')
+
+            if [ -z "$VERSION" ] || [ "$VERSION" = "unknown" ]; then
+              # Empty or unknown, use fallback
+              if [ -n "${{ matrix.tool.version }}" ]; then
+                echo "${{ matrix.tool.version }}" > "$VERSION_FILE"
+                echo "Version file was empty, using configured version for ${{ matrix.tool.name }}: ${{ matrix.tool.version }}"
+              else
+                echo "${{ steps.fetch-version.outputs.version }}" > "$VERSION_FILE"
+                echo "Version file was empty, using fetched version for ${{ matrix.tool.name }}: ${{ steps.fetch-version.outputs.version }}"
+              fi
             else
-              echo "${{ steps.fetch-version.outputs.version }}" > ${{ matrix.tool.name }}.version
-              echo "Using fetched version for ${{ matrix.tool.name }}: ${{ steps.fetch-version.outputs.version }}"
+              # Valid version, write it back (cleaned)
+              echo "$VERSION" > "$VERSION_FILE"
+              echo "Version for ${{ matrix.tool.name }}: $VERSION"
             fi
           fi
 
@@ -406,18 +492,23 @@ jobs:
           RELEASE_TAG = "${{ github.event.inputs.release_tag || 'latest' }}"
           REPO = "${{ github.repository }}"
 
-          # Read versions from version files with better fallback logic
+          # Read versions from version files with robust fallback logic
           def read_version(tool_name):
               version_file = f"versions/{tool_name}.version"
               if os.path.exists(version_file):
                   with open(version_file, 'r') as f:
                       version = f.read().strip()
-                      if version and version != "unknown":
+                      # Remove 'v' prefix if present
+                      version = version.lstrip('v')
+                      if version and version != "unknown" and version != "":
                           return version
-              # Use repo version as fallback for local tools
-              if tool_name in ["gpm", "set_locale"]:
-                  return "${{ env.REPO_VERSION }}"
-              return "unknown"
+              # Explicit fallbacks per tool
+              fallback_versions = {
+                  "gpm": "${{ env.REPO_VERSION }}",
+                  "set_locale": "${{ env.REPO_VERSION }}",
+                  "ble.sh": "0.4.0",
+              }
+              return fallback_versions.get(tool_name, "unknown")
 
           tools_metadata = {
               "gpm": {
@@ -481,23 +572,23 @@ jobs:
           for tool_name in os.listdir("release-files"):
               if tool_name.startswith("."):
                   continue
-              
-              filepath = f"release-files/{tool_name}"
+
+                  filepath = f"release-files/{tool_name}"
               if not os.path.isfile(filepath):
                   continue
-              
-              with open(filepath, "rb") as f:
+
+                  with open(filepath, "rb") as f:
                   data = f.read()
                   sha256 = hashlib.sha256(data).hexdigest()
                   size = len(data)
-              
-              if tool_name not in tools_metadata:
+
+                  if tool_name not in tools_metadata:
                   print(f"Warning: No metadata for {tool_name}")
                   continue
-              
-              metadata = tools_metadata[tool_name]
+
+                  metadata = tools_metadata[tool_name]
               tool_version = read_version(tool_name)
-              
+
               tool_entry = {
                   "version": tool_version,
                   "description": metadata["description"],
@@ -508,12 +599,12 @@ jobs:
                   "license": metadata["license"],
                   "source_url": metadata["source_url"]
               }
-              
+
               if "source_sha256" in metadata:
                   tool_entry["source_sha256"] = metadata["source_sha256"]
-              
-              manifest["tools"][tool_name] = tool_entry
-              print(f"Added {tool_name}: {size} bytes, SHA256: {sha256[:16]}...")
+
+                  manifest["tools"][tool_name] = tool_entry
+              print(f"Added {tool_name}: {size} bytes, SHA256: {sha256[:16]}..., Version: {tool_version}")
 
           with open("release-files/manifest.json", "w") as f:
               json.dump(manifest, f, indent=2)
@@ -567,10 +658,10 @@ jobs:
               f.write("gpm list\n")
               f.write("```\n\n")
               f.write("### Verification\n")
-              f.write("- \`manifest.json\` - SHA256 checksums for all binaries\n")
-              f.write("- \`SOURCES.txt\` - Source code provenance\n")
-              f.write("- \`COPYING\` - GPL compliance notice\n")
-              f.write("- \`licenses/\` - Full license texts\n\n")
+              f.write("- `manifest.json` - SHA256 checksums for all binaries\n")
+              f.write("- `SOURCES.txt` - Source code provenance\n")
+              f.write("- `COPYING` - GPL compliance notice\n")
+              f.write("- `licenses/` - Full license texts\n\n")
               f.write("### Build Information\n")
               f.write(f"- Built: ${BUILD_INFO}\n")
               f.write(f"- Commit: ${COMMIT}\n")
