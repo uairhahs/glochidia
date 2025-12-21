@@ -122,9 +122,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Use Rust Alpine for Rust/cargo builds, Standard Alpine for everything else
 if echo "${BUILD_COMMAND}" | grep -q "cargo"; then
-	echo "3. Building Rust project in rust:alpine container..."
+	if echo "${BINARY_NAME}" | grep -q "edit"; then
+		echo "Detected msedit: Switching to glibc-based container for ZimaOS compatibility..."
+		CONTAINER_IMAGE="rust:slim-bookworm"
+	else
+		echo "3. Building Rust project in rust:alpine container..."
+		CONTAINER_IMAGE="rust:alpine"
+	fi
 	BUILD_SCRIPT="${SCRIPT_DIR}/alpine-build.sh"
-	CONTAINER_IMAGE="rust:alpine"
 	SCRIPT_NAME="alpine-build.sh"
 else
 	echo "3. Building in Alpine container..."
@@ -148,6 +153,7 @@ ${CONTAINER_RUNTIME} run --rm \
 	-v "${BUILD_SCRIPT}":/"${SCRIPT_NAME}":ro \
 	-e BUILD_COMMAND="${BUILD_COMMAND}" \
 	-e ARTIFACT_NAME="${BINARY_NAME}" \
+	-e CONTAINER_IMAGE="${CONTAINER_IMAGE}" \
 	"${CONTAINER_IMAGE}" \
 	sh /"${SCRIPT_NAME}"
 
@@ -215,15 +221,16 @@ if [[ ${DEPLOY_METHOD} == "ssh" ]]; then
 	fi
 
 	echo "Creating deployment directory..."
-	if ssh "${DEPLOY_USER}@${DEPLOY_HOST}" 'mkdir -p -- "$DEPLOY_PATH"' &&
-		ssh "${DEPLOY_USER}@${DEPLOY_HOST}" 'test -d -- "$DEPLOY_PATH"'; then
+	if ssh "${DEPLOY_USER}@${DEPLOY_HOST}" "mkdir -p \"${DEPLOY_PATH}\"" &&
+		ssh "${DEPLOY_USER}@${DEPLOY_HOST}" "test -d \"${DEPLOY_PATH}\""; then
 		:
 	else
 		echo "Error: Failed to create deployment directory on remote device"
+		echo "Path attempted: ${DEPLOY_PATH}"
 		exit 1
 	fi
 
-	rsync -av --progress "${ARTIFACT_PATH}" "${DEPLOY_USER}@${DEPLOY_HOST}:'${DEPLOY_PATH}/'" || {
+	rsync -av --progress "${ARTIFACT_PATH}" "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}/" || {
 		echo "SSH deployment failed"
 		exit 1
 	}
