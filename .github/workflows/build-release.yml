@@ -111,7 +111,7 @@ jobs:
             
             # Handle glochidia-locale
             if [ "${{ matrix.tool.name }}" = "glochidia-locale" ]; then
-              strip target/x86_64-unknown-linux-musl/release/set_locale
+              -----    strip target/x86_64-unknown-linux-musl/release/set_locale
               cp target/x86_64-unknown-linux-musl/release/set_locale ../set_locale-bin
               # Extract version from set_locale binary
               VERSION_OUTPUT=$(target/x86_64-unknown-linux-musl/release/set_locale --version 2>&1 || echo "unknown")
@@ -121,9 +121,11 @@ jobs:
               strip target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }}
               cp target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }} ../${{ matrix.tool.name }}-bin
               # Extract version from built binary
-              VERSION_OUTPUT=$(target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }} --version 2>&1 || echo "unknown")
-              VERSION=$(echo "$VERSION_OUTPUT" | grep -oP '\d+\.\d+\.\d+' | head -n1 || echo "${{ steps.fetch-version.outputs.version }}")
-              echo "$VERSION" > ../${{ matrix.tool.name }}.version.tmp
+              # Use sed to handle Alpine's grep limitations and extract X.Y.Z
+              BIN_PATH="target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }}"
+              VERSION_OUTPUT=$(./$BIN_PATH --version 2>&1 || echo "unknown")
+              VERSION=$(echo "$VERSION_OUTPUT" | sed -n 's/.*\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p' | head -n1)
+              echo "${VERSION:-${{ steps.fetch-version.outputs.version }}}" > ../${{ matrix.tool.name }}.version
             fi
           elif [ -n "${{ matrix.tool.repo_url }}" ]; then
             # Build external repos
@@ -278,13 +280,13 @@ jobs:
             cp "${BUILD_DIR}/${{ matrix.tool.name }}" ./${{ matrix.tool.name }}-bin
             # Try to extract version from the binary in the container
             VERSION_OUTPUT=$(podman run --rm -v "${BUILD_DIR}:/mnt:ro" alpine:edge /mnt/${{ matrix.tool.name }} --version 2>&1 || echo "unknown")
-            VERSION=$(echo "$VERSION_OUTPUT" | grep -oP '\d+\.\d+\.\d+' | head -n1 || echo "${{ steps.fetch-version.outputs.version }}")
-            echo "$VERSION" > ${{ matrix.tool.name }}.version.tmp
+            VERSION=$(echo "$VERSION_OUTPUT" | sed -n 's/.*\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p' | head -n1)
+            echo "${VERSION:-${{ steps.fetch-version.outputs.version }}}" > ${{ matrix.tool.name }}.version
           elif [ -f "${BUILD_DIR}/${{ matrix.tool.name }}.sh" ]; then
             cp "${BUILD_DIR}/${{ matrix.tool.name }}.sh" ./${{ matrix.tool.name }}-bin
             # For shell scripts, extract version from the script itself
-            VERSION=$(grep -oP 'VERSION.*\K\d+\.\d+\.\d+' "${BUILD_DIR}/${{ matrix.tool.name }}.sh" | head -n1 || echo "${{ steps.fetch-version.outputs.version }}")
-            echo "$VERSION" > ${{ matrix.tool.name }}.version.tmp
+            VERSION=$(grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' "${BUILD_DIR}/${{ matrix.tool.name }}.sh" | head -n1)
+            echo "${VERSION:-${{ steps.fetch-version.outputs.version }}}" > ${{ matrix.tool.name }}.version
           else
             echo "Error: Binary not found in ${BUILD_DIR}"
             ls -la "${BUILD_DIR}" || true
@@ -306,12 +308,19 @@ jobs:
 
       - name: Finalize version metadata
         run: |
-          if [ -f "${{ matrix.tool.name }}.version.tmp" ]; then
-            mv ${{ matrix.tool.name }}.version.tmp ${{ matrix.tool.name }}.version
-            echo "Version extracted from binary: $(cat ${{ matrix.tool.name }}.version)"
+          # Clean up version file if it exists
+          if [ -f "${{ matrix.tool.name }}.version" ]; then
+            VERSION=$(cat ${{ matrix.tool.name }}.version | tr -d '\n\r' | xargs)
+            if [ -n "$VERSION" ] && [ "$VERSION" != "unknown" ]; then
+              echo "$VERSION" > ${{ matrix.tool.name }}.version
+              echo "Version for ${{ matrix.tool.name }}: $VERSION"
+            else
+              echo "${{ steps.fetch-version.outputs.version }}" > ${{ matrix.tool.name }}.version
+              echo "Using fetched version for ${{ matrix.tool.name }}: ${{ steps.fetch-version.outputs.version }}"
+            fi
           else
             echo "${{ steps.fetch-version.outputs.version }}" > ${{ matrix.tool.name }}.version
-            echo "Using fetched version: ${{ steps.fetch-version.outputs.version }}"
+            echo "Using fetched version for ${{ matrix.tool.name }}: ${{ steps.fetch-version.outputs.version }}"
           fi
 
       - name: Upload artifact
