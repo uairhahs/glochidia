@@ -43,7 +43,7 @@ jobs:
             source_url: "https://github.com/microsoft/edit"
             repo_url: "https://github.com/microsoft/edit"
             binary_name: "edit"
-            build_cmd: "export RUSTC_BOOTSTRAP=1 && cargo build --release --target x86_64-unknown-linux-musl"
+            build_cmd: "export RUSTC_BOOTSTRAP=1 && cargo build --all-features --release -Z build-std=std,panic_abort --target x86_64-unknown-linux-musl"
           - name: glochidia-locale
             description: "Locale management utilities (set_locale, locale-gen)"
             license: "GPL-2.0-or-later"
