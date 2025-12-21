@@ -36,14 +36,14 @@ jobs:
             license: "ISC"
             source_url: "https://github.com/starship/starship"
             repo_url: "https://github.com/starship/starship"
-            build_cmd: "cargo build --release --target x86_64-unknown-linux-musl --no-default-features --features battery"
+            build_cmd: "cargo build --release --no-default-features --features battery"
           - name: msedit
             description: "Text editor for terminals"
             license: "MIT"
             source_url: "https://github.com/microsoft/edit"
             repo_url: "https://github.com/microsoft/edit"
             binary_name: "edit"
-            build_cmd: "export RUSTC_BOOTSTRAP=1 && cargo build --release --target x86_64-unknown-linux-musl"
+            build_cmd: "cargo build --all-features --release"
           - name: glochidia-locale
             description: "Locale management utilities (set_locale, locale-gen)"
             license: "GPL-2.0-or-later"
@@ -104,27 +104,15 @@ jobs:
         if: steps.cache-binary.outputs.cache-hit != 'true'
         run: |
           echo "Building ${{ matrix.tool.name }}..."
-          WORKSPACE_DIR="$(pwd)"
           if [ -n "${{ matrix.tool.working_dir }}" ]; then
             cd ${{ matrix.tool.working_dir }}
             cargo build --release --target x86_64-unknown-linux-musl
-            
-            # Handle glochidia-locale
-            if [ "${{ matrix.tool.name }}" = "glochidia-locale" ]; then
-              strip target/x86_64-unknown-linux-musl/release/set_locale
-              cp target/x86_64-unknown-linux-musl/release/set_locale ../set_locale-bin
-              # Extract version from set_locale binary
-              VERSION_OUTPUT=$(target/x86_64-unknown-linux-musl/release/set_locale --version 2>&1 || echo "unknown")
-              VERSION=$(echo "$VERSION_OUTPUT" | grep -oP '\d+\.\d+\.\d+' | head -n1 || echo "${{ steps.fetch-version.outputs.version }}")
-              echo "$VERSION" > ../glochidia-locale.version.tmp
-            else
-              strip target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }}
-              cp target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }} ../${{ matrix.tool.name }}-bin
-              # Extract version from built binary
-              VERSION_OUTPUT=$(target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }} --version 2>&1 || echo "unknown")
-              VERSION=$(echo "$VERSION_OUTPUT" | grep -oP '\d+\.\d+\.\d+' | head -n1 || echo "${{ steps.fetch-version.outputs.version }}")
-              echo "$VERSION" > ../${{ matrix.tool.name }}.version.tmp
-            fi
+            strip target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }}
+            cp target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }} ../${{ matrix.tool.name }}-bin
+            # Extract version from built binary
+            VERSION_OUTPUT=$(target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }} --version 2>&1 || echo "unknown")
+            VERSION=$(echo "$VERSION_OUTPUT" | sed -n 's/.*\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p' | head -n1)
+            echo "${VERSION:-${{ env.REPO_VERSION }}}" > ../${{ matrix.tool.name }}.version
           elif [ -n "${{ matrix.tool.repo_url }}" ]; then
             # Build external repos
             BUILD_DIR="/tmp/build_${{ matrix.tool.name }}"
@@ -137,16 +125,9 @@ jobs:
               strip target/x86_64-unknown-linux-musl/release/${BINARY_NAME}
               # Extract version from built binary
               VERSION_OUTPUT=$(target/x86_64-unknown-linux-musl/release/${BINARY_NAME} --version 2>&1 || echo "unknown")
-              VERSION=$(echo "$VERSION_OUTPUT" | grep -oP '\d+\.\d+\.\d+' | head -n1 || echo "${{ steps.fetch-version.outputs.version }}")
-              echo "$VERSION" > "${WORKSPACE_DIR}/${{ matrix.tool.name }}.version.tmp"
-              cp target/x86_64-unknown-linux-musl/release/${BINARY_NAME} "${WORKSPACE_DIR}/${{ matrix.tool.name }}-bin"
-            elif [ -f "build/${BINARY_NAME}" ]; then
-              strip build/${BINARY_NAME}
-              # Extract version from built binary
-              VERSION_OUTPUT=$(build/${BINARY_NAME} --version 2>&1 || echo "unknown")
-              VERSION=$(echo "$VERSION_OUTPUT" | grep -oP '\d+\.\d+\.\d+' | head -n1 || echo "${{ steps.fetch-version.outputs.version }}")
-              echo "$VERSION" > "${WORKSPACE_DIR}/${{ matrix.tool.name }}.version.tmp"
-              cp build/${BINARY_NAME} "${WORKSPACE_DIR}/${{ matrix.tool.name }}-bin"
+              VERSION=$(echo "$VERSION_OUTPUT" | sed -n 's/.*\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p' | head -n1)
+              echo "${VERSION:-${{ steps.fetch-version.outputs.version }}}" > "${{ matrix.tool.name }}.version"
+              cp target/x86_64-unknown-linux-musl/release/${BINARY_NAME} "${{ matrix.tool.name }}-bin"
             fi
           fi
 
@@ -165,19 +146,27 @@ jobs:
 
       - name: Finalize version metadata
         run: |
-          if [ -f "${{ matrix.tool.name }}.version.tmp" ]; then
-            mv ${{ matrix.tool.name }}.version.tmp ${{ matrix.tool.name }}.version
-            echo "Version extracted from binary: $(cat ${{ matrix.tool.name }}.version)"
-            # Handle additional binaries for glochidia-locale
-            if [ -f "set_locale.version.tmp" ]; then
-              mv set_locale.version.tmp set_locale.version
-              mv locale-gen.version.tmp locale-gen.version
-              echo "Version extracted for set_locale: $(cat set_locale.version)"
-              echo "Version extracted for locale-gen: $(cat locale-gen.version)"
+          if [ -f "${{ matrix.tool.name }}.version" ]; then
+            VERSION=$(cat ${{ matrix.tool.name }}.version | tr -d '\n\r' | xargs)
+            if [ -n "$VERSION" ] && [ "$VERSION" != "unknown" ]; then
+              echo "Version for ${{ matrix.tool.name }}: $VERSION"
+            else
+              if [ -n "${{ matrix.tool.working_dir }}" ]; then
+                echo "${{ env.REPO_VERSION }}" > ${{ matrix.tool.name }}.version
+                echo "Using repo version for ${{ matrix.tool.name }}: ${{ env.REPO_VERSION }}"
+              else
+                echo "${{ steps.fetch-version.outputs.version }}" > ${{ matrix.tool.name }}.version
+                echo "Using fetched version for ${{ matrix.tool.name }}: ${{ steps.fetch-version.outputs.version }}"
+              fi
             fi
           else
-            echo "${{ steps.fetch-version.outputs.version }}" > ${{ matrix.tool.name }}.version
-            echo "Using fetched version: ${{ steps.fetch-version.outputs.version }}"
+            if [ -n "${{ matrix.tool.working_dir }}" ]; then
+              echo "${{ env.REPO_VERSION }}" > ${{ matrix.tool.name }}.version
+              echo "Using repo version for ${{ matrix.tool.name }}: ${{ env.REPO_VERSION }}"
+            else
+              echo "${{ steps.fetch-version.outputs.version }}" > ${{ matrix.tool.name }}.version
+              echo "Using fetched version for ${{ matrix.tool.name }}: ${{ steps.fetch-version.outputs.version }}"
+            fi
           fi
 
       - name: Upload artifact with metadata
@@ -187,8 +176,6 @@ jobs:
           path: |
             ${{ matrix.tool.name }}-bin
             ${{ matrix.tool.name }}.version
-            set_locale-bin
-            set_locale.version
 
   build-c-tools:
     name: Build C/C++ Tools
@@ -278,13 +265,13 @@ jobs:
             cp "${BUILD_DIR}/${{ matrix.tool.name }}" ./${{ matrix.tool.name }}-bin
             # Try to extract version from the binary in the container
             VERSION_OUTPUT=$(podman run --rm -v "${BUILD_DIR}:/mnt:ro" alpine:edge /mnt/${{ matrix.tool.name }} --version 2>&1 || echo "unknown")
-            VERSION=$(echo "$VERSION_OUTPUT" | grep -oP '\d+\.\d+\.\d+' | head -n1 || echo "${{ steps.fetch-version.outputs.version }}")
-            echo "$VERSION" > ${{ matrix.tool.name }}.version.tmp
+            VERSION=$(echo "$VERSION_OUTPUT" | sed -n 's/.*\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p' | head -n1)
+            echo "${VERSION:-${{ steps.fetch-version.outputs.version }}}" > ${{ matrix.tool.name }}.version
           elif [ -f "${BUILD_DIR}/${{ matrix.tool.name }}.sh" ]; then
             cp "${BUILD_DIR}/${{ matrix.tool.name }}.sh" ./${{ matrix.tool.name }}-bin
             # For shell scripts, extract version from the script itself
-            VERSION=$(grep -oP 'VERSION.*\K\d+\.\d+\.\d+' "${BUILD_DIR}/${{ matrix.tool.name }}.sh" | head -n1 || echo "${{ steps.fetch-version.outputs.version }}")
-            echo "$VERSION" > ${{ matrix.tool.name }}.version.tmp
+            VERSION=$(grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' "${BUILD_DIR}/${{ matrix.tool.name }}.sh" | head -n1)
+            echo "${VERSION:-${{ steps.fetch-version.outputs.version }}}" > ${{ matrix.tool.name }}.version
           else
             echo "Error: Binary not found in ${BUILD_DIR}"
             ls -la "${BUILD_DIR}" || true
@@ -306,12 +293,31 @@ jobs:
 
       - name: Finalize version metadata
         run: |
-          if [ -f "${{ matrix.tool.name }}.version.tmp" ]; then
-            mv ${{ matrix.tool.name }}.version.tmp ${{ matrix.tool.name }}.version
-            echo "Version extracted from binary: $(cat ${{ matrix.tool.name }}.version)"
+          # Clean up version file if it exists, with better fallback handling
+          if [ -f "${{ matrix.tool.name }}.version" ]; then
+            VERSION=$(cat ${{ matrix.tool.name }}.version | tr -d '\n\r' | xargs)
+            if [ -n "$VERSION" ] && [ "$VERSION" != "unknown" ]; then
+              echo "$VERSION" > ${{ matrix.tool.name }}.version
+              echo "Version for ${{ matrix.tool.name }}: $VERSION"
+            else
+              # For local tools, use repo version; for external tools, use fetched version
+              if [ "${{ matrix.tool.working_dir }}" != "" ]; then
+                echo "${{ env.REPO_VERSION }}" > ${{ matrix.tool.name }}.version
+                echo "Using repo version for ${{ matrix.tool.name }}: ${{ env.REPO_VERSION }}"
+              else
+                echo "${{ steps.fetch-version.outputs.version }}" > ${{ matrix.tool.name }}.version
+                echo "Using fetched version for ${{ matrix.tool.name }}: ${{ steps.fetch-version.outputs.version }}"
+              fi
+            fi
           else
-            echo "${{ steps.fetch-version.outputs.version }}" > ${{ matrix.tool.name }}.version
-            echo "Using fetched version: ${{ steps.fetch-version.outputs.version }}"
+            # For local tools, use repo version; for external tools, use fetched version
+            if [ "${{ matrix.tool.working_dir }}" != "" ]; then
+              echo "${{ env.REPO_VERSION }}" > ${{ matrix.tool.name }}.version
+              echo "Using repo version for ${{ matrix.tool.name }}: ${{ env.REPO_VERSION }}"
+            else
+              echo "${{ steps.fetch-version.outputs.version }}" > ${{ matrix.tool.name }}.version
+              echo "Using fetched version for ${{ matrix.tool.name }}: ${{ steps.fetch-version.outputs.version }}"
+            fi
           fi
 
       - name: Upload artifact
@@ -400,12 +406,17 @@ jobs:
           RELEASE_TAG = "${{ github.event.inputs.release_tag || 'latest' }}"
           REPO = "${{ github.repository }}"
 
-          # Read versions from version files
+          # Read versions from version files with better fallback logic
           def read_version(tool_name):
               version_file = f"versions/{tool_name}.version"
               if os.path.exists(version_file):
                   with open(version_file, 'r') as f:
-                      return f.read().strip()
+                      version = f.read().strip()
+                      if version and version != "unknown":
+                          return version
+              # Use repo version as fallback for local tools
+              if tool_name in ["gpm", "set_locale"]:
+                  return "${{ env.REPO_VERSION }}"
               return "unknown"
 
           tools_metadata = {

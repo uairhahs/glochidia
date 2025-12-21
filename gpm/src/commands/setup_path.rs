@@ -12,6 +12,10 @@ pub fn run(config: &Config) -> Result<()> {
     let install_dir = config.install_dir.to_string_lossy();
     let path_export = format!("export PATH=\"{}:$PATH\"", install_dir);
     let marker_comment = "# Added by gpm (Glochidia Package Manager)";
+    let gpm_wrapper = format!(
+        "# gpm wrapper to handle shell globbing\ngpm() {{\n    set -f\n    {} \"$@\"\n    set +f\n}}",
+        config.install_dir.join("gpm").to_string_lossy()
+    );
 
     println!("Setting up PATH for gpm binaries...");
     println!("Install directory: {}", install_dir);
@@ -43,11 +47,12 @@ pub fn run(config: &Config) -> Result<()> {
             continue;
         }
 
-        // Prepend PATH configuration at the top
+        // Prepend PATH configuration and gpm wrapper at the top
         let new_content = format!(
-            "{marker_comment}\n{path_export}\n\n{content}",
+            "{marker_comment}\n{path_export}\n{gpm_wrapper}\n\n{content}",
             marker_comment = marker_comment,
             path_export = path_export,
+            gpm_wrapper = gpm_wrapper,
             content = content
         );
 
@@ -59,7 +64,7 @@ pub fn run(config: &Config) -> Result<()> {
 
     // Report results
     if !modified_files.is_empty() {
-        println!("Added PATH configuration to:");
+        println!("Added PATH configuration and gpm wrapper to:");
         for file in &modified_files {
             println!("  - {}", file);
         }
@@ -67,6 +72,7 @@ pub fn run(config: &Config) -> Result<()> {
         println!("To apply changes, run:");
         println!("  source ~/.bashrc   # or ~/.zshrc, ~/.profile");
         println!();
+        println!("The gpm wrapper prevents shell glob expansion issues.");
         println!("Or start a new shell session.");
     }
 
@@ -82,6 +88,7 @@ pub fn run(config: &Config) -> Result<()> {
         println!();
         println!("You can manually add to your shell config:");
         println!("  {}", path_export);
+        println!("  {}", gpm_wrapper);
     }
 
     Ok(())
