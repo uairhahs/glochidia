@@ -56,6 +56,7 @@ jobs:
             version: ""
             git_ref: ""
             working_dir: ""
+            target: "x86_64-unknown-linux-gnu"
           - name: set_locale
             description: "Locale management utilities (set_locale, locale-gen)"
             license: "GPL-2.0-or-later"
@@ -125,7 +126,8 @@ jobs:
             "${{ matrix.tool.build_cmd }}" \
             "${{ matrix.tool.binary_name }}" \
             "${{ steps.fetch-version.outputs.version }}" \
-            "${{ env.REPO_VERSION }}"
+            "${{ env.REPO_VERSION }}" \
+            "${{ matrix.tool.target || 'x86_64-unknown-linux-musl' }}"
 
       - name: Verify static binary
         if: steps.cache-binary.outputs.cache-hit != 'true'
