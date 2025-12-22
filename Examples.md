@@ -8,18 +8,11 @@ The `grow_glochidium.sh` script uses **native container builds in Alpine** or **
 
 ## Prerequisites
 
-1. **Podman** (or Docker): Used for container runtime
+- **Podman** (or Docker): Used for container runtime
 
-   ```bash
-   podman --version  # Should be 3.0+
-   ```
-
-2. **Base Images**: Ensure you have the latest Alpine and Debian images
-
-   ```bash
-   podman pull alpine:latest
-   podman pull debian:bookworm-slim
-   ```
+  ```bash
+  podman --version  # Should be 3.0+
+  ```
 
 **Status**: ✅ Successfully tested and deployed
 

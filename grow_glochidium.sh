@@ -129,13 +129,13 @@ if echo "${BUILD_COMMAND}" | grep -q "cargo"; then
 		echo "3. Building Rust project in rust:alpine container..."
 		CONTAINER_IMAGE="rust:alpine"
 	fi
-	BUILD_SCRIPT="${SCRIPT_DIR}/alpine-build.sh"
-	SCRIPT_NAME="alpine-build.sh"
+	BUILD_SCRIPT="${SCRIPT_DIR}/container-build.sh"
+	SCRIPT_NAME="container-build.sh"
 else
 	echo "3. Building in Alpine container..."
-	BUILD_SCRIPT="${SCRIPT_DIR}/alpine-build.sh"
+	BUILD_SCRIPT="${SCRIPT_DIR}/container-build.sh"
 	CONTAINER_IMAGE="alpine:latest"
-	SCRIPT_NAME="alpine-build.sh"
+	SCRIPT_NAME="container-build.sh"
 fi
 
 if [[ ! -f ${BUILD_SCRIPT} ]]; then
