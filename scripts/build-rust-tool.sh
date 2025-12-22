@@ -57,6 +57,8 @@ elif [[ ${SOURCE_URL} == *"github.com"* ]]; then
 
 	# Find and copy binary
 	BINARY_NAME="${BINARY_NAME:-${TOOL_NAME}}"
+	echo "Looking for binary: target/x86_64-unknown-linux-musl/release/${BINARY_NAME}"
+	ls -la target/x86_64-unknown-linux-musl/release/ || true
 	if [[ -f "target/x86_64-unknown-linux-musl/release/${BINARY_NAME}" ]]; then
 		strip "target/x86_64-unknown-linux-musl/release/${BINARY_NAME}"
 
