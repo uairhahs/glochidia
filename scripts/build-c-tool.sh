@@ -35,6 +35,10 @@ if [[ -z ${BUILD_DIR} ]]; then
 fi
 
 echo "Detected BUILD_DIR: ${BUILD_DIR}"
+echo "Contents of build directory:"
+ls -la "${BUILD_DIR}" || true
+echo "Looking for files matching pattern:"
+find "${BUILD_DIR}" -name "*${TOOL_NAME}*" -type f || true
 
 # Copy binary and extract version
 if [[ -f "${BUILD_DIR}/${TOOL_NAME}" ]]; then
