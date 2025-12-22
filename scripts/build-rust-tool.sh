@@ -83,9 +83,10 @@ elif [[ ${SOURCE_URL} == *"github.com"* ]]; then
 		fi
 
 		VERSION=${VERSION#v}
-		echo "${VERSION:-${FETCHED_VERSION}-${REPO_VERSION}}" >"${TOOL_NAME}.version"
+		# Copy to current working directory (where workflow expects it)
+		cp "${TARGET_PATH}" "${OLDPWD}/${TOOL_NAME}-bin"
+		echo "${VERSION:-${FETCHED_VERSION}-${REPO_VERSION}}" >"${OLDPWD}/${TOOL_NAME}.version"
 		echo "Version extracted for ${TOOL_NAME}: ${VERSION:-${FETCHED_VERSION}}"
-		cp "${TARGET_PATH}" "${TOOL_NAME}-bin"
 	else
 		echo "Error: Binary not found at expected path"
 		exit 1
