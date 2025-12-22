@@ -178,7 +178,7 @@ jobs:
             license: "BSD-3-Clause"
             source_url: "https://github.com/akinomyoga/ble.sh"
             build_cmd: "make"
-            version: "0.4.0"
+            version: ""
             git_ref: ""
             source_sha256: ""
           - name: fastfetch
