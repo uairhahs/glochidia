@@ -19,8 +19,8 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build-rust:
-    name: Build Rust Tools
+  build-rust-musl:
+    name: Build Rust Tools (musl)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -46,17 +46,6 @@ jobs:
             git_ref: ""
             working_dir: ""
             binary_name: ""
-          - name: msedit
-            description: "Text editor for terminals"
-            license: "MIT"
-            source_url: "https://github.com/microsoft/edit"
-            repo_url: "https://github.com/microsoft/edit"
-            binary_name: "edit"
-            build_cmd: "cargo build --all-features --release"
-            version: ""
-            git_ref: ""
-            working_dir: ""
-            target: "x86_64-unknown-linux-gnu"
           - name: set_locale
             description: "Locale management utilities (set_locale, locale-gen)"
             license: "GPL-2.0-or-later"
@@ -119,35 +108,15 @@ jobs:
       - name: Build ${{ matrix.tool.name }}
         if: steps.cache-binary.outputs.cache-hit != 'true'
         run: |
-          # Use grow_glochidium.sh for all Rust builds to handle container selection
-          export DEPLOY_METHOD=ci-cd
-          export DEPLOY_USER=ci
-          export DEPLOY_HOST=localhost
-          export DEPLOY_PATH=/tmp/ci
-          if [ -n "${{ matrix.tool.working_dir }}" ]; then
-            # Local build from working directory
-            cd "${{ matrix.tool.working_dir }}"
-            cargo build --release --target "${{ matrix.tool.target || 'x86_64-unknown-linux-musl' }}"
-            strip "target/${{ matrix.tool.target || 'x86_64-unknown-linux-musl' }}/release/${{ matrix.tool.binary_name || matrix.tool.name }}"
-            cp "target/${{ matrix.tool.target || 'x86_64-unknown-linux-musl' }}/release/${{ matrix.tool.binary_name || matrix.tool.name }}" "../${{ matrix.tool.name }}-bin"
-            echo "${{ steps.fetch-version.outputs.version }}" > "../${{ matrix.tool.name }}.version"
-          else
-            # External build using grow_glochidium.sh
-            BUILD_CMD="${{ matrix.tool.build_cmd }}"
-            if [ -n "${{ matrix.tool.target }}" ]; then
-              BUILD_CMD="${BUILD_CMD} --target ${{ matrix.tool.target }}"
-            fi
-            bash grow_glochidium.sh \
-              "${{ matrix.tool.source_url }}" \
-              "${{ matrix.tool.binary_name || matrix.tool.name }}" \
-              "${BUILD_CMD}"
-            # Extract build directory and copy artifacts
-            BUILD_DIR=$(find /tmp -name "glochidium_build_*" -type d | head -1)
-            if [ -f "${BUILD_DIR}/${{ matrix.tool.binary_name || matrix.tool.name }}" ]; then
-              cp "${BUILD_DIR}/${{ matrix.tool.binary_name || matrix.tool.name }}" "${{ matrix.tool.name }}-bin"
-            fi
-            echo "${{ steps.fetch-version.outputs.version }}" > "${{ matrix.tool.name }}.version"
-          fi
+          bash scripts/build-rust-tool.sh \
+            "${{ matrix.tool.name }}" \
+            "${{ matrix.tool.source_url }}" \
+            "${{ matrix.tool.working_dir }}" \
+            "${{ matrix.tool.build_cmd }}" \
+            "${{ matrix.tool.binary_name }}" \
+            "${{ steps.fetch-version.outputs.version }}" \
+            "${{ env.REPO_VERSION }}" \
+            "x86_64-unknown-linux-musl"
 
       - name: Verify static binary
         if: steps.cache-binary.outputs.cache-hit != 'true'
@@ -156,6 +125,100 @@ jobs:
       - name: Finalize version metadata
         run: |
           sh scripts/finalize-version.sh \
+            "${{ matrix.tool.name }}" \
+            "${{ matrix.tool.version }}" \
+            "${{ steps.fetch-version.outputs.version }}" \
+            "${{ env.REPO_VERSION }}" \
+            "${{ matrix.tool.working_dir }}"
+
+      - name: Upload artifact with metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.tool.name }}
+          path: |
+            ${{ matrix.tool.name }}-bin
+            ${{ matrix.tool.name }}.version
+
+  build-rust-gnu:
+    name: Build Rust Tools (gnu)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        tool:
+          - name: msedit
+            description: "Text editor for terminals"
+            license: "MIT"
+            source_url: "https://github.com/microsoft/edit"
+            repo_url: "https://github.com/microsoft/edit"
+            binary_name: "edit"
+            build_cmd: "cargo build --all-features --release"
+            version: ""
+            git_ref: ""
+            working_dir: ""
+            target: "x86_64-unknown-linux-gnu"
+
+    container:
+      image: rust:slim-bookworm
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: apt-get update && apt-get install -y build-essential libicu-dev git pkg-config
+
+      - name: Fetch latest release version
+        id: fetch-version
+        run: |
+          VERSION=$(bash scripts/fetch-version.sh \
+            "${{ matrix.tool.name }}" \
+            "${{ matrix.tool.source_url }}" \
+            "${{ matrix.tool.repo_url }}" \
+            "${{ matrix.tool.version }}" \
+            "${{ matrix.tool.git_ref }}")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Cache compiled binary
+        id: cache-binary
+        uses: actions/cache@v4
+        with:
+          path: ${{ matrix.tool.name }}-bin
+          key: ${{ runner.os }}-binary-${{ matrix.tool.name }}-${{ steps.fetch-version.outputs.version }}-gnu
+
+      - name: Cache cargo registry
+        if: steps.cache-binary.outputs.cache-hit != 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        if: steps.cache-binary.outputs.cache-hit != 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build ${{ matrix.tool.name }}
+        if: steps.cache-binary.outputs.cache-hit != 'true'
+        run: |
+          bash scripts/build-rust-tool.sh \
+            "${{ matrix.tool.name }}" \
+            "${{ matrix.tool.source_url }}" \
+            "${{ matrix.tool.working_dir }}" \
+            "${{ matrix.tool.build_cmd }}" \
+            "${{ matrix.tool.binary_name }}" \
+            "${{ steps.fetch-version.outputs.version }}" \
+            "${{ env.REPO_VERSION }}" \
+            "${{ matrix.tool.target }}"
+
+      - name: Verify static binary
+        if: steps.cache-binary.outputs.cache-hit != 'true'
+        run: bash scripts/verify-binary.sh "${{ matrix.tool.name }}-bin" "${{ matrix.tool.name }}"
+
+      - name: Finalize version metadata
+        run: |
+          bash scripts/finalize-version.sh \
             "${{ matrix.tool.name }}" \
             "${{ matrix.tool.version }}" \
             "${{ steps.fetch-version.outputs.version }}" \
@@ -260,7 +323,7 @@ jobs:
 
   generate-manifest:
     name: Generate Manifest and Create Release
-    needs: [build-rust, build-c-tools]
+    needs: [build-rust-musl, build-rust-gnu, build-c-tools]
     runs-on: ubuntu-latest
     permissions:
       contents: write
