@@ -1,5 +1,5 @@
 #!/bin/sh
-# Alpine build script for C/C++ and Rust projects
+# Container build script for C/C++ and Rust projects
 set -e
 cd /src
 

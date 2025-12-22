@@ -31,12 +31,21 @@ jobs:
             license: "GPL-2.0-or-later"
             source_url: "https://github.com/${{ github.repository }}"
             working_dir: gpm
+            version: ""
+            git_ref: ""
+            repo_url: ""
+            binary_name: ""
+            build_cmd: ""
           - name: starship
             description: "Cross-shell prompt"
             license: "ISC"
             source_url: "https://github.com/starship/starship"
             repo_url: "https://github.com/starship/starship"
             build_cmd: "cargo build --release --no-default-features --features battery"
+            version: ""
+            git_ref: ""
+            working_dir: ""
+            binary_name: ""
           - name: msedit
             description: "Text editor for terminals"
             license: "MIT"
@@ -44,12 +53,19 @@ jobs:
             repo_url: "https://github.com/microsoft/edit"
             binary_name: "edit"
             build_cmd: "cargo build --all-features --release"
+            version: ""
+            git_ref: ""
+            working_dir: ""
           - name: set_locale
             description: "Locale management utilities (set_locale, locale-gen)"
             license: "GPL-2.0-or-later"
             source_url: "https://github.com/${{ github.repository }}"
             working_dir: glochidia-locale
             binary_name: "set_locale"
+            version: ""
+            git_ref: ""
+            repo_url: ""
+            build_cmd: ""
 
     container:
       image: rust:alpine
@@ -63,19 +79,13 @@ jobs:
       - name: Fetch latest release version
         id: fetch-version
         run: |
-          if [ -n "${{ matrix.tool.repo_url }}" ]; then
-            echo "Fetching latest release for ${{ matrix.tool.name }}..."
-            LATEST_TAG=$(wget -qO- "https://api.github.com/repos/$(echo ${{ matrix.tool.repo_url }} | sed 's|https://github.com/||')/releases/latest" | grep '"tag_name":' | sed -E 's/.*"tag_name": "([^"]+)".*/\1/')
-            if [ -z "$LATEST_TAG" ]; then
-              echo "Failed to fetch latest release, using configured version"
-              LATEST_TAG="${{ matrix.tool.git_ref || matrix.tool.version }}"
-            fi
-            echo "version=$LATEST_TAG" >> $GITHUB_OUTPUT
-            echo "Latest version: $LATEST_TAG"
-          else
-            echo "version=${{ matrix.tool.version }}" >> $GITHUB_OUTPUT
-            echo "Using configured version: ${{ matrix.tool.version }}"
-          fi
+          VERSION=$(bash scripts/fetch-version.sh \
+            "${{ matrix.tool.name }}" \
+            "${{ matrix.tool.source_url }}" \
+            "${{ matrix.tool.repo_url }}" \
+            "${{ matrix.tool.version }}" \
+            "${{ matrix.tool.git_ref }}")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Cache compiled binary
         id: cache-binary
@@ -104,111 +114,27 @@ jobs:
       - name: Build ${{ matrix.tool.name }}
         if: steps.cache-binary.outputs.cache-hit != 'true'
         run: |
-          echo "Building ${{ matrix.tool.name }}..."
-          if [ -n "${{ matrix.tool.working_dir }}" ]; then
-            cd ${{ matrix.tool.working_dir }}
-            cargo build --release --target x86_64-unknown-linux-musl
-            strip target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }}
-            cp target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }} ../${{ matrix.tool.name }}-bin
-
-            # Extract version from built binary with multiple fallback patterns
-            VERSION_OUTPUT=$(target/x86_64-unknown-linux-musl/release/${{ matrix.tool.name }} --version 2>&1 || echo "")
-
-            # Try strict X.Y.Z pattern first
-            VERSION=$(echo "$VERSION_OUTPUT" | sed -n 's/.*\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p' | head -n1)
-
-            # If no match, try looser pattern (any number sequence with dots)
-            if [ -z "$VERSION" ]; then
-              VERSION=$(echo "$VERSION_OUTPUT" | grep -o -E "([0-9]+\.?)+[0-9]+" | head -1)
-            fi
-
-            # Remove 'v' prefix if present
-            VERSION=$(echo "$VERSION" | sed 's/^v//')
-
-            # Use repo version as final fallback
-            echo "${VERSION:-${{ env.REPO_VERSION }}}" > ../${{ matrix.tool.name }}.version
-            echo "Version extracted for ${{ matrix.tool.name }}: ${VERSION:-${{ env.REPO_VERSION }}}"
-          elif [ -n "${{ matrix.tool.repo_url }}" ]; then
-            # Build external repos
-            BUILD_DIR="/tmp/build_${{ matrix.tool.name }}"
-            git clone --depth 1 --branch ${{ steps.fetch-version.outputs.version }} ${{ matrix.tool.repo_url }} ${BUILD_DIR}
-            cd ${BUILD_DIR}
-            eval "${{ matrix.tool.build_cmd }}"
-            # Find and copy binary back to workspace
-            BINARY_NAME="${{ matrix.tool.binary_name || matrix.tool.name }}"
-            if [ -f "target/x86_64-unknown-linux-musl/release/${BINARY_NAME}" ]; then
-              strip target/x86_64-unknown-linux-musl/release/${BINARY_NAME}
-
-              # Extract version from built binary with multiple fallback patterns
-              VERSION_OUTPUT=$(target/x86_64-unknown-linux-musl/release/${BINARY_NAME} --version 2>&1 || echo "")
-
-              # Try strict X.Y.Z pattern first
-              VERSION=$(echo "$VERSION_OUTPUT" | sed -n 's/.*\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p' | head -n1)
-
-              # If no match, try looser pattern (any number sequence with dots)
-              if [ -z "$VERSION" ]; then
-                VERSION=$(echo "$VERSION_OUTPUT" | grep -o -E "([0-9]+\.?)+[0-9]+" | head -1)
-              fi
-
-              # Remove 'v' prefix if present
-              VERSION=$(echo "$VERSION" | sed 's/^v//')
-
-              # Use fetched version as fallback, then repo version
-              echo "${VERSION:-${{ steps.fetch-version.outputs.version }}-${{ env.REPO_VERSION }}}" > "${{ matrix.tool.name }}.version"
-              echo "Version extracted for ${{ matrix.tool.name }}: ${VERSION:-${{ steps.fetch-version.outputs.version }}}"
-              cp target/x86_64-unknown-linux-musl/release/${BINARY_NAME} "${{ matrix.tool.name }}-bin"
-            else
-              echo "Error: Binary not found at expected path"
-              exit 1
-            fi
-          fi
+          bash scripts/build-rust-tool.sh \
+            "${{ matrix.tool.name }}" \
+            "${{ matrix.tool.source_url }}" \
+            "${{ matrix.tool.working_dir }}" \
+            "${{ matrix.tool.build_cmd }}" \
+            "${{ matrix.tool.binary_name }}" \
+            "${{ steps.fetch-version.outputs.version }}" \
+            "${{ env.REPO_VERSION }}"
 
       - name: Verify static binary
         if: steps.cache-binary.outputs.cache-hit != 'true'
-        run: |
-          echo "Verifying ${{ matrix.tool.name }} is statically linked..."
-          file ${{ matrix.tool.name }}-bin
-          if file ${{ matrix.tool.name }}-bin | grep -q "dynamically linked"; then
-            if file ${{ matrix.tool.name }}-bin | grep -q "interpreter"; then
-              echo "Error: Binary is dynamically linked with interpreter"
-              exit 1
-            fi
-          fi
-          echo "Binary verification passed"
+        run: bash scripts/verify-binary.sh "${{ matrix.tool.name }}-bin" "${{ matrix.tool.name }}"
 
       - name: Finalize version metadata
         run: |
-          VERSION_FILE="${{ matrix.tool.name }}.version"
-
-          # Ensure version file exists and is not empty
-          if [ ! -f "$VERSION_FILE" ]; then
-            # File doesn't exist, create with fallback
-            if [ -n "${{ matrix.tool.working_dir }}" ]; then
-              echo "${{ env.REPO_VERSION }}" > "$VERSION_FILE"
-              echo "Created version file for ${{ matrix.tool.name }} with repo version: ${{ env.REPO_VERSION }}"
-            else
-              echo "${{ steps.fetch-version.outputs.version }}" > "$VERSION_FILE"
-              echo "Created version file for ${{ matrix.tool.name }} with fetched version: ${{ steps.fetch-version.outputs.version }}"
-            fi
-          else
-            # File exists, clean it up and validate
-            VERSION=$(cat "$VERSION_FILE" | tr -d '\n\r' | xargs | sed 's/^v//')
-
-            if [ -z "$VERSION" ] || [ "$VERSION" = "unknown" ]; then
-              # Empty or unknown, use fallback
-              if [ -n "${{ matrix.tool.working_dir }}" ]; then
-                echo "${{ env.REPO_VERSION }}" > "$VERSION_FILE"
-                echo "Version file was empty, using repo version for ${{ matrix.tool.name }}: ${{ env.REPO_VERSION }}"
-              else
-                echo "${{ steps.fetch-version.outputs.version }}" > "$VERSION_FILE"
-                echo "Version file was empty, using fetched version for ${{ matrix.tool.name }}: ${{ steps.fetch-version.outputs.version }}"
-              fi
-            else
-              # Valid version, write it back (cleaned)
-              echo "$VERSION" > "$VERSION_FILE"
-              echo "Version for ${{ matrix.tool.name }}: $VERSION"
-            fi
-          fi
+          bash scripts/finalize-version.sh \
+            "${{ matrix.tool.name }}" \
+            "${{ matrix.tool.version }}" \
+            "${{ steps.fetch-version.outputs.version }}" \
+            "${{ env.REPO_VERSION }}" \
+            "${{ matrix.tool.working_dir }}"
 
       - name: Upload artifact with metadata
         uses: actions/upload-artifact@v4
@@ -231,23 +157,32 @@ jobs:
             source_url: "https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz"
             source_sha256: "dd16fb1d67bfab79a72f5e8390735c49e3e8e70b4945a15ab1f81ddb78658fb3"
             build_cmd: "./configure LDFLAGS=-static && make -j$(nproc)"
+            version: ""
+            git_ref: ""
           - name: gawk
             description: "GNU Awk text processing"
             license: "GPL-3.0-or-later"
             source_url: "https://ftp.gnu.org/gnu/gawk/gawk-5.3.2.tar.xz"
             source_sha256: "3203e52edb182061ac4fe37f0040e8d5b5ed5d37e1c8a1dcf5d8288d0c757cd5"
             build_cmd: "./configure LDFLAGS=-static && make -j$(nproc)"
+            version: ""
+            git_ref: ""
           - name: ble.sh
             description: "Bash Line Editor"
             license: "BSD-3-Clause"
             source_url: "https://github.com/akinomyoga/ble.sh"
             build_cmd: "make"
             version: "0.4.0"
+            git_ref: ""
+            source_sha256: ""
           - name: fastfetch
             description: "System information tool"
             license: "MIT"
             source_url: "https://github.com/fastfetch-cli/fastfetch"
             build_cmd: "cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXE_LINKER_FLAGS=-static -DENABLE_SYSTEM_YYJSON=OFF -DENABLE_DIRECTWRITE=OFF -DENABLE_XRANDR=OFF -DENABLE_X11=OFF -DENABLE_WAYLAND=OFF -DENABLE_GIO=OFF -DENABLE_DCONF=OFF -DENABLE_DBUS=OFF -DENABLE_XFCONF=OFF -DENABLE_SQLITE3=OFF -DENABLE_IMAGEMAGICK=OFF -DENABLE_CHAFA=OFF -DENABLE_ZLIB=OFF -DENABLE_EGL=OFF -DENABLE_GLX=OFF -DENABLE_OSMESA=OFF -DENABLE_OPENCL=OFF -DENABLE_VULKAN=OFF -DENABLE_RPM=OFF -DENABLE_DRM=OFF -DENABLE_FREETYPE=OFF && cmake --build build --target fastfetch"
+            version: ""
+            git_ref: ""
+            source_sha256: ""
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -255,25 +190,13 @@ jobs:
       - name: Fetch latest release version
         id: fetch-version
         run: |
-          if [[ "${{ matrix.tool.source_url }}" == *"github.com"* ]] && [ -n "${{ matrix.tool.git_ref }}" ]; then
-            echo "Fetching latest release for ${{ matrix.tool.name }}..."
-            REPO_PATH=$(echo "${{ matrix.tool.source_url }}" | sed 's|https://github.com/||' | sed 's|\.git$||')
-            LATEST_TAG=$(curl -s "https://api.github.com/repos/${REPO_PATH}/releases/latest" | grep '"tag_name":' | sed -E 's/.*"tag_name": "([^"]+)".*/\1/')
-            if [ -z "$LATEST_TAG" ]; then
-              echo "Failed to fetch latest release, using configured version"
-              LATEST_TAG="${{ matrix.tool.git_ref }}"
-            fi
-            echo "version=$LATEST_TAG" >> $GITHUB_OUTPUT
-            echo "Latest version: $LATEST_TAG"
-          else
-            # Use explicitly configured version or default fallback
-            CONFIGURED_VERSION="${{ matrix.tool.version }}"
-            if [ -z "$CONFIGURED_VERSION" ]; then
-              CONFIGURED_VERSION="unknown"
-            fi
-            echo "version=$CONFIGURED_VERSION" >> $GITHUB_OUTPUT
-            echo "Using configured version: $CONFIGURED_VERSION"
-          fi
+          VERSION=$(bash scripts/fetch-version.sh \
+            "${{ matrix.tool.name }}" \
+            "${{ matrix.tool.source_url }}" \
+            "" \
+            "${{ matrix.tool.version }}" \
+            "${{ matrix.tool.git_ref }}")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Install podman
         run: |
@@ -282,130 +205,24 @@ jobs:
 
       - name: Build ${{ matrix.tool.name }}
         run: |
-          # Set up environment for grow_glochidium.sh
-          export CONTAINER_RUNTIME=podman
-          export DEPLOY_METHOD=ci-cd
-          export DEPLOY_USER=ci
-          export DEPLOY_HOST=localhost
-          export DEPLOY_PATH=/tmp/ci
-
-          # Run the build script and capture output to extract BUILD_DIR
-          OUTPUT=$(bash grow_glochidium.sh \
-            "${{ matrix.tool.source_url }}" \
+          bash scripts/build-c-tool.sh \
             "${{ matrix.tool.name }}" \
-            "${{ matrix.tool.build_cmd }}" 2>&1)
-
-          echo "$OUTPUT"
-
-          # Extract the actual BUILD_DIR from the script output
-          BUILD_DIR=$(echo "$OUTPUT" | grep "Build directory preserved:" | sed 's/.*Build directory preserved: //')
-
-          if [ -z "$BUILD_DIR" ]; then
-            echo "Error: Could not determine BUILD_DIR from script output"
-            exit 1
-          fi
-
-          echo "Detected BUILD_DIR: $BUILD_DIR"
-
-          # Initialize version variable
-          VERSION=""
-
-          # Copy binary from build dir and extract version
-          if [ -f "${BUILD_DIR}/${{ matrix.tool.name }}" ]; then
-            cp "${BUILD_DIR}/${{ matrix.tool.name }}" ./${{ matrix.tool.name }}-bin
-            chmod +x ./${{ matrix.tool.name }}-bin
-
-            # Try to extract version from the binary
-            VERSION_OUTPUT=$(./${{ matrix.tool.name }}-bin --version 2>&1 || echo "")
-
-            # Try strict X.Y.Z pattern first
-            VERSION=$(echo "$VERSION_OUTPUT" | sed -n 's/.*\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p' | head -n1)
-
-            # If no match, try looser pattern
-            if [ -z "$VERSION" ]; then
-              VERSION=$(echo "$VERSION_OUTPUT" | grep -o -E "([0-9]+\.?)+[0-9]+" | head -1)
-            fi
-
-            # Remove 'v' prefix if present
-            VERSION=$(echo "$VERSION" | sed 's/^v//')
-
-          elif [ -f "${BUILD_DIR}/${{ matrix.tool.name }}.sh" ]; then
-            cp "${BUILD_DIR}/${{ matrix.tool.name }}.sh" ./${{ matrix.tool.name }}-bin
-            chmod +x ./${{ matrix.tool.name }}-bin
-
-            # For shell scripts, extract version from the script itself
-            VERSION=$(grep -o -E "([0-9]+\.?)+[0-9]+" "${BUILD_DIR}/${{ matrix.tool.name }}.sh" | head -n1)
-
-            # Remove 'v' prefix if present
-            VERSION=$(echo "$VERSION" | sed 's/^v//')
-
-          else
-            echo "Error: Binary not found in ${BUILD_DIR}"
-            ls -la "${BUILD_DIR}" || true
-            exit 1
-          fi
-
-          # Ensure version file is created with appropriate fallback
-          if [ -z "$VERSION" ]; then
-            # No version extracted, use configured version or fetched version
-            if [ -n "${{ matrix.tool.version }}" ]; then
-              VERSION="${{ matrix.tool.version }}"
-            else
-              VERSION="${{ steps.fetch-version.outputs.version }}"
-            fi
-          fi
-
-          # Clean version and write to file
-          VERSION=$(echo "$VERSION" | tr -d '\n\r' | xargs | sed 's/^v//')
-          echo "$VERSION" > ${{ matrix.tool.name }}.version
-          echo "Version for ${{ matrix.tool.name }}: $VERSION"
+            "${{ matrix.tool.source_url }}" \
+            "${{ matrix.tool.build_cmd }}" \
+            "${{ matrix.tool.version }}" \
+            "${{ steps.fetch-version.outputs.version }}"
 
       - name: Verify static binary
-        run: |
-          echo "Verifying ${{ matrix.tool.name }} is statically linked..."
-          file ${{ matrix.tool.name }}-bin
-          if file ${{ matrix.tool.name }}-bin | grep -q "dynamically linked"; then
-            echo "Error: Binary is dynamically linked"
-            exit 1
-          fi
-          if ! file ${{ matrix.tool.name }}-bin | grep -q "statically linked"; then
-            echo "Warning: Cannot confirm static linking"
-          fi
-          echo "Binary verification passed"
+        run: bash scripts/verify-binary.sh "${{ matrix.tool.name }}-bin" "${{ matrix.tool.name }}"
 
       - name: Finalize version metadata
         run: |
-          VERSION_FILE="${{ matrix.tool.name }}.version"
-
-          # Ensure version file exists and is not empty
-          if [ ! -f "$VERSION_FILE" ]; then
-            # File doesn't exist, create with fallback
-            if [ -n "${{ matrix.tool.version }}" ]; then
-              echo "${{ matrix.tool.version }}" > "$VERSION_FILE"
-              echo "Created version file for ${{ matrix.tool.name }} with configured version: ${{ matrix.tool.version }}"
-            else
-              echo "${{ steps.fetch-version.outputs.version }}" > "$VERSION_FILE"
-              echo "Created version file for ${{ matrix.tool.name }} with fetched version: ${{ steps.fetch-version.outputs.version }}"
-            fi
-          else
-            # File exists, clean it up and validate
-            VERSION=$(cat "$VERSION_FILE" | tr -d '\n\r' | xargs | sed 's/^v//')
-
-            if [ -z "$VERSION" ] || [ "$VERSION" = "unknown" ]; then
-              # Empty or unknown, use fallback
-              if [ -n "${{ matrix.tool.version }}" ]; then
-                echo "${{ matrix.tool.version }}" > "$VERSION_FILE"
-                echo "Version file was empty, using configured version for ${{ matrix.tool.name }}: ${{ matrix.tool.version }}"
-              else
-                echo "${{ steps.fetch-version.outputs.version }}" > "$VERSION_FILE"
-                echo "Version file was empty, using fetched version for ${{ matrix.tool.name }}: ${{ steps.fetch-version.outputs.version }}"
-              fi
-            else
-              # Valid version, write it back (cleaned)
-              echo "$VERSION" > "$VERSION_FILE"
-              echo "Version for ${{ matrix.tool.name }}: $VERSION"
-            fi
-          fi
+          bash scripts/finalize-version.sh \
+            "${{ matrix.tool.name }}" \
+            "${{ matrix.tool.version }}" \
+            "${{ steps.fetch-version.outputs.version }}" \
+            "${{ env.REPO_VERSION }}" \
+            ""
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -484,137 +301,10 @@ jobs:
 
       - name: Generate manifest with Python
         run: |
-          python3 << 'PYEOF'
-          import json
-          import hashlib
-          import os
-          from datetime import datetime
-
-          RELEASE_TAG = "${{ github.event.inputs.release_tag || 'latest' }}"
-          REPO = "${{ github.repository }}"
-
-          # Read versions from version files with robust fallback logic
-          def read_version(tool_name):
-              version_file = f"versions/{tool_name}.version"
-              if os.path.exists(version_file):
-                  with open(version_file, 'r') as f:
-                      version = f.read().strip()
-                      # Remove 'v' prefix if present
-                      version = version.lstrip('v')
-                      if version and version != "unknown" and version != "":
-                          return version
-              # Explicit fallbacks per tool
-              fallback_versions = {
-                  "gpm": "${{ env.REPO_VERSION }}",
-                  "set_locale": "${{ env.REPO_VERSION }}",
-                  "ble.sh": "0.4.0",
-              }
-              return fallback_versions.get(tool_name, "unknown")
-
-          tools_metadata = {
-              "gpm": {
-                  "description": "Glochidia Package Manager",
-                  "license": "GPL-2.0-or-later",
-                  "source_url": f"https://github.com/{REPO}",
-                  "build_type": "rust-alpine"
-              },
-              "make": {
-                  "description": "GNU Make build tool",
-                  "license": "GPL-3.0-or-later",
-                  "source_url": "https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz",
-                  "source_sha256": "dd16fb1d67bfab79a72f5e8390735c49e3e8e70b4945a15ab1f81ddb78658fb3",
-                  "build_type": "alpine"
-              },
-              "gawk": {
-                  "description": "GNU Awk text processing",
-                  "license": "GPL-3.0-or-later",
-                  "source_url": "https://ftp.gnu.org/gnu/gawk/gawk-5.3.2.tar.xz",
-                  "source_sha256": "3203e52edb182061ac4fe37f0040e8d5b5ed5d37e1c8a1dcf5d8288d0c757cd5",
-                  "build_type": "alpine"
-              },
-              "starship": {
-                  "description": "Cross-shell prompt",
-                  "license": "ISC",
-                  "source_url": "https://github.com/starship/starship",
-                  "build_type": "rust-alpine"
-              },
-              "fastfetch": {
-                  "description": "System information tool",
-                  "license": "MIT",
-                  "source_url": "https://github.com/fastfetch-cli/fastfetch",
-                  "build_type": "alpine"
-              },
-              "ble.sh": {
-                  "description": "Bash Line Editor",
-                  "license": "BSD-3-Clause",
-                  "source_url": "https://github.com/akinomyoga/ble.sh",
-                  "build_type": "script"
-              },
-              "msedit": {
-                  "description": "Text editor for terminals",
-                  "license": "MIT",
-                  "source_url": "https://github.com/microsoft/edit",
-                  "build_type": "rust-alpine"
-              },
-              "set_locale": {
-                  "description": "Locale setting utility",
-                  "license": "GPL-2.0-or-later",
-                  "source_url": f"https://github.com/{REPO}",
-                  "build_type": "rust-alpine"
-              }
-          }
-
-          manifest = {
-              "repo_version": "${{ env.REPO_VERSION }}",
-              "updated_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
-              "tools": {}
-          }
-
-
-            for tool_name in os.listdir("release-files"):
-              if tool_name.startswith("."):
-                continue
-
-              filepath = f"release-files/{tool_name}"
-              if not os.path.isfile(filepath):
-                continue
-
-              with open(filepath, "rb") as f:
-                data = f.read()
-                sha256 = hashlib.sha256(data).hexdigest()
-                size = len(data)
-
-              if tool_name not in tools_metadata:
-                print(f"Warning: No metadata for {tool_name}")
-                continue
-
-              metadata = tools_metadata[tool_name]
-              tool_version = read_version(tool_name)
-
-              tool_entry = {
-                "version": tool_version,
-                "description": metadata["description"],
-                "url": f"https://github.com/{REPO}/releases/download/{RELEASE_TAG}/{tool_name}",
-                "sha256": sha256,
-                "size": size,
-                "build_type": metadata["build_type"],
-                "license": metadata["license"],
-                "source_url": metadata["source_url"]
-              }
-
-              if "source_sha256" in metadata:
-                tool_entry["source_sha256"] = metadata["source_sha256"]
-
-              manifest["tools"][tool_name] = tool_entry
-              print(f"Added {tool_name}: {size} bytes, SHA256: {sha256[:16]}..., Version: {tool_version}")
-
-          with open("release-files/manifest.json", "w") as f:
-              json.dump(manifest, f, indent=2)
-
-          print("\nGenerated manifest:")
-          print(json.dumps(manifest, indent=2))
-          PYEOF
-
+          python3 scripts/generate-manifest.py \
+            "${{ github.repository }}" \
+            "${{ github.event.inputs.release_tag || 'latest' }}" \
+            "${{ env.REPO_VERSION }}"
           echo ""
           echo "Final release files:"
           ls -lh release-files/
@@ -628,50 +318,7 @@ jobs:
           RELEASE_TAG="${{ github.event.inputs.release_tag || 'latest' }}"
           BUILD_INFO="${{ github.event_name == 'workflow_dispatch' && 'manually' || 'from tag push' }}"
           COMMIT="${{ github.sha }}"
-
-          python3 << PYEOF
-          import json
-
-          with open('release-files/manifest.json', 'r') as f:
-              manifest = json.load(f)
-
-          with open('release-body.md', 'w') as f:
-              f.write("## Static Binaries for ZimaOS\n\n")
-              f.write("Built from source with GPL compliance. All binaries are statically linked and verified.\n\n")
-              f.write("### Available Tools\n")
-
-              for tool_name in sorted(manifest['tools'].keys()):
-                  tool = manifest['tools'][tool_name]
-                  # Strip leading 'v' from version if present to avoid 'vv' prefix
-                  version = tool['version'].lstrip('v') if tool['version'] else 'unknown'
-                  f.write(f"- **{tool_name}** v{version} - {tool['description']}\n")
-
-              f.write("\n### Installation\n")
-              f.write("```bash\n")
-              f.write("# Download and install gpm\n")
-              f.write(f"wget https://github.com/${REPO}/releases/download/${RELEASE_TAG}/gpm\n")
-              f.write("chmod +x gpm\n")
-              f.write("mv gpm /DATA/bin/\n\n")
-              f.write("# Configure PATH and install tools\n")
-              f.write("gpm setup-path\n")
-              f.write("source ~/.bashrc\n")
-              f.write("gpm install make\n")
-              f.write("gpm install gawk\n")
-              f.write("gpm list\n")
-              f.write("```\n\n")
-              f.write("### Verification\n")
-              f.write("- `manifest.json` - SHA256 checksums for all binaries\n")
-              f.write("- `SOURCES.txt` - Source code provenance\n")
-              f.write("- `COPYING` - GPL compliance notice\n")
-              f.write("- `licenses/` - Full license texts\n\n")
-              f.write("### Build Information\n")
-              f.write(f"- Built: ${BUILD_INFO}\n")
-              f.write(f"- Commit: ${COMMIT}\n")
-              f.write("- All binaries verified as statically linked\n")
-
-          print("Generated release body with tool versions")
-          PYEOF
-
+          python3 scripts/generate-release-body.py "$REPO" "$RELEASE_TAG" "$BUILD_INFO" "$COMMIT"
           cat release-body.md
 
       - name: Determine release version

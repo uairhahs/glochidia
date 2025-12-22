@@ -1,0 +1,52 @@
+{
+  "gpm": {
+    "description": "Glochidia Package Manager",
+    "license": "GPL-2.0-or-later",
+    "source_url": "https://github.com/{repo}",
+    "build_type": "rust-alpine"
+  },
+  "make": {
+    "description": "GNU Make build tool",
+    "license": "GPL-3.0-or-later",
+    "source_url": "https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz",
+    "source_sha256": "dd16fb1d67bfab79a72f5e8390735c49e3e8e70b4945a15ab1f81ddb78658fb3",
+    "build_type": "alpine"
+  },
+  "gawk": {
+    "description": "GNU Awk text processing",
+    "license": "GPL-3.0-or-later",
+    "source_url": "https://ftp.gnu.org/gnu/gawk/gawk-5.3.2.tar.xz",
+    "source_sha256": "3203e52edb182061ac4fe37f0040e8d5b5ed5d37e1c8a1dcf5d8288d0c757cd5",
+    "build_type": "alpine"
+  },
+  "starship": {
+    "description": "Cross-shell prompt",
+    "license": "ISC",
+    "source_url": "https://github.com/starship/starship",
+    "build_type": "rust-alpine"
+  },
+  "fastfetch": {
+    "description": "System information tool",
+    "license": "MIT",
+    "source_url": "https://github.com/fastfetch-cli/fastfetch",
+    "build_type": "alpine"
+  },
+  "ble.sh": {
+    "description": "Bash Line Editor",
+    "license": "BSD-3-Clause",
+    "source_url": "https://github.com/akinomyoga/ble.sh",
+    "build_type": "script"
+  },
+  "msedit": {
+    "description": "Text editor for terminals",
+    "license": "MIT",
+    "source_url": "https://github.com/microsoft/edit",
+    "build_type": "rust-alpine"
+  },
+  "set_locale": {
+    "description": "Locale setting utility",
+    "license": "GPL-2.0-or-later",
+    "source_url": "https://github.com/{repo}",
+    "build_type": "rust-alpine"
+  }
+}
