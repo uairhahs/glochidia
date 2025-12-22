@@ -39,7 +39,13 @@ if [[ -n ${WORKING_DIR} ]] && [[ ${WORKING_DIR} != "" ]]; then
 elif [[ ${SOURCE_URL} == *"github.com"* ]]; then
 	# Build external repos
 	BUILD_DIR="/tmp/build_${TOOL_NAME}"
-	git clone --depth 1 --branch "${FETCHED_VERSION}" "${SOURCE_URL}" "${BUILD_DIR}"
+
+	# Use fetched version or clone default branch
+	if [[ -n ${FETCHED_VERSION} ]] && [[ ${FETCHED_VERSION} != "unknown" ]]; then
+		git clone --depth 1 --branch "${FETCHED_VERSION}" "${SOURCE_URL}" "${BUILD_DIR}"
+	else
+		git clone --depth 1 "${SOURCE_URL}" "${BUILD_DIR}"
+	fi
 	cd "${BUILD_DIR}"
 
 	# Use provided build command or default Rust build

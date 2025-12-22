@@ -69,7 +69,10 @@ if [[ -z ${VERSION} ]]; then
 fi
 
 # Clean version and write to file
-VERSION=$(echo "${VERSION}" | tr -d '\n\r' | xargs | sed 's/^v//')
+VERSION=$(echo "${VERSION}" | tr -d '\n\r' | xargs | sed 's/^v//' || echo "${VERSION}")
 echo "${VERSION}" >"${TOOL_NAME}.version"
 echo "Version for ${TOOL_NAME}: ${VERSION}"
 echo "Build completed successfully"
+
+# Ensure we exit with success
+exit 0
