@@ -18,6 +18,11 @@ fi
 
 echo "Building ${TOOL_NAME} with target ${TARGET}..."
 
+# Install target if not musl
+if [[ ${TARGET} != "x86_64-unknown-linux-musl" ]]; then
+	rustup target add "${TARGET}"
+fi
+
 if [[ -n ${WORKING_DIR} ]] && [[ ${WORKING_DIR} != "" ]]; then
 	# Build from local working directory
 	cd "${WORKING_DIR}"
