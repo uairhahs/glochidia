@@ -79,13 +79,17 @@ jobs:
       - name: Fetch latest release version
         id: fetch-version
         run: |
-          VERSION=$(sh scripts/fetch-version.sh \
-            "${{ matrix.tool.name }}" \
-            "${{ matrix.tool.source_url }}" \
-            "${{ matrix.tool.repo_url }}" \
-            "${{ matrix.tool.version }}" \
-            "${{ matrix.tool.git_ref }}")
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          if [ -n "${{ matrix.tool.working_dir }}" ]; then
+            echo "version=${{ env.REPO_VERSION }}" >> $GITHUB_OUTPUT
+          else
+            VERSION=$(sh scripts/fetch-version.sh \
+              "${{ matrix.tool.name }}" \
+              "${{ matrix.tool.source_url }}" \
+              "${{ matrix.tool.repo_url }}" \
+              "${{ matrix.tool.version }}" \
+              "${{ matrix.tool.git_ref }}")
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          fi
 
       - name: Cache compiled binary
         id: cache-binary
