@@ -32,9 +32,9 @@ GNU Nano | 7.2 | GPL-3.0-or-later | https://www.nano-editor.org/dist/v7/nano-7.2
 
 ## Build Instructions
 
-All binaries are compiled statically from the above sources using the build scripts in this repository:
-- Alpine Linux (musl libc) for C/C++ programs: See alpine-build.sh
-- Debian with musl target for Rust programs: See debian-build.sh
+All binaries are compiled statically (unless functionality is tested on target) from the above sources using the build scripts in this repository:
+- Alpine Linux (musl libc) for C/C++ programs: See container-build.sh
+- Debian with gnu target for Rust programs with dynamic links: See container-build.sh
 
 The complete build process is automated in grow_glochidium.sh and can be reproduced using:
 ```bash
