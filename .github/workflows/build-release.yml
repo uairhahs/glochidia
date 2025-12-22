@@ -570,41 +570,42 @@ jobs:
               "tools": {}
           }
 
-          for tool_name in os.listdir("release-files"):
+
+            for tool_name in os.listdir("release-files"):
               if tool_name.startswith("."):
-                  continue
+                continue
 
-                  filepath = f"release-files/{tool_name}"
+              filepath = f"release-files/{tool_name}"
               if not os.path.isfile(filepath):
-                  continue
+                continue
 
-                  with open(filepath, "rb") as f:
-                  data = f.read()
-                  sha256 = hashlib.sha256(data).hexdigest()
-                  size = len(data)
+              with open(filepath, "rb") as f:
+                data = f.read()
+                sha256 = hashlib.sha256(data).hexdigest()
+                size = len(data)
 
-                  if tool_name not in tools_metadata:
-                  print(f"Warning: No metadata for {tool_name}")
-                  continue
+              if tool_name not in tools_metadata:
+                print(f"Warning: No metadata for {tool_name}")
+                continue
 
-                  metadata = tools_metadata[tool_name]
+              metadata = tools_metadata[tool_name]
               tool_version = read_version(tool_name)
 
               tool_entry = {
-                  "version": tool_version,
-                  "description": metadata["description"],
-                  "url": f"https://github.com/{REPO}/releases/download/{RELEASE_TAG}/{tool_name}",
-                  "sha256": sha256,
-                  "size": size,
-                  "build_type": metadata["build_type"],
-                  "license": metadata["license"],
-                  "source_url": metadata["source_url"]
+                "version": tool_version,
+                "description": metadata["description"],
+                "url": f"https://github.com/{REPO}/releases/download/{RELEASE_TAG}/{tool_name}",
+                "sha256": sha256,
+                "size": size,
+                "build_type": metadata["build_type"],
+                "license": metadata["license"],
+                "source_url": metadata["source_url"]
               }
 
               if "source_sha256" in metadata:
-                  tool_entry["source_sha256"] = metadata["source_sha256"]
+                tool_entry["source_sha256"] = metadata["source_sha256"]
 
-                  manifest["tools"][tool_name] = tool_entry
+              manifest["tools"][tool_name] = tool_entry
               print(f"Added {tool_name}: {size} bytes, SHA256: {sha256[:16]}..., Version: {tool_version}")
 
           with open("release-files/manifest.json", "w") as f:
