@@ -119,15 +119,35 @@ jobs:
       - name: Build ${{ matrix.tool.name }}
         if: steps.cache-binary.outputs.cache-hit != 'true'
         run: |
-          bash scripts/build-rust-tool.sh \
-            "${{ matrix.tool.name }}" \
-            "${{ matrix.tool.source_url }}" \
-            "${{ matrix.tool.working_dir }}" \
-            "${{ matrix.tool.build_cmd }}" \
-            "${{ matrix.tool.binary_name }}" \
-            "${{ steps.fetch-version.outputs.version }}" \
-            "${{ env.REPO_VERSION }}" \
-            "${{ matrix.tool.target || 'x86_64-unknown-linux-musl' }}"
+          # Use grow_glochidium.sh for all Rust builds to handle container selection
+          export DEPLOY_METHOD=ci-cd
+          export DEPLOY_USER=ci
+          export DEPLOY_HOST=localhost
+          export DEPLOY_PATH=/tmp/ci
+          if [ -n "${{ matrix.tool.working_dir }}" ]; then
+            # Local build from working directory
+            cd "${{ matrix.tool.working_dir }}"
+            cargo build --release --target "${{ matrix.tool.target || 'x86_64-unknown-linux-musl' }}"
+            strip "target/${{ matrix.tool.target || 'x86_64-unknown-linux-musl' }}/release/${{ matrix.tool.binary_name || matrix.tool.name }}"
+            cp "target/${{ matrix.tool.target || 'x86_64-unknown-linux-musl' }}/release/${{ matrix.tool.binary_name || matrix.tool.name }}" "../${{ matrix.tool.name }}-bin"
+            echo "${{ steps.fetch-version.outputs.version }}" > "../${{ matrix.tool.name }}.version"
+          else
+            # External build using grow_glochidium.sh
+            BUILD_CMD="${{ matrix.tool.build_cmd }}"
+            if [ -n "${{ matrix.tool.target }}" ]; then
+              BUILD_CMD="${BUILD_CMD} --target ${{ matrix.tool.target }}"
+            fi
+            bash grow_glochidium.sh \
+              "${{ matrix.tool.source_url }}" \
+              "${{ matrix.tool.binary_name || matrix.tool.name }}" \
+              "${BUILD_CMD}"
+            # Extract build directory and copy artifacts
+            BUILD_DIR=$(find /tmp -name "glochidium_build_*" -type d | head -1)
+            if [ -f "${BUILD_DIR}/${{ matrix.tool.binary_name || matrix.tool.name }}" ]; then
+              cp "${BUILD_DIR}/${{ matrix.tool.binary_name || matrix.tool.name }}" "${{ matrix.tool.name }}-bin"
+            fi
+            echo "${{ steps.fetch-version.outputs.version }}" > "${{ matrix.tool.name }}.version"
+          fi
 
       - name: Verify static binary
         if: steps.cache-binary.outputs.cache-hit != 'true'
