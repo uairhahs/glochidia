@@ -44,7 +44,7 @@ jobs:
             repo_url: "https://github.com/microsoft/edit"
             binary_name: "edit"
             build_cmd: "cargo build --all-features --release"
-          - name: glochidia-locale
+          - name: set_locale
             description: "Locale management utilities (set_locale, locale-gen)"
             license: "GPL-2.0-or-later"
             source_url: "https://github.com/${{ github.repository }}"
