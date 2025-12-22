@@ -100,7 +100,7 @@ jobs:
           key: ${{ runner.os }}-binary-${{ matrix.tool.name }}-${{ steps.fetch-version.outputs.version }}-musl
 
       - name: Install build dependencies
-        run: apk add --no-cache git musl-dev file cmake make gcc g++ linux-headers
+        run: apk add --no-cache git musl-dev file cmake make gcc g++ linux-headers bash
 
       - name: Cache cargo registry
         if: steps.cache-binary.outputs.cache-hit != 'true'
@@ -119,7 +119,7 @@ jobs:
       - name: Build ${{ matrix.tool.name }}
         if: steps.cache-binary.outputs.cache-hit != 'true'
         run: |
-          sh scripts/build-rust-tool.sh \
+          bash scripts/build-rust-tool.sh \
             "${{ matrix.tool.name }}" \
             "${{ matrix.tool.source_url }}" \
             "${{ matrix.tool.working_dir }}" \
