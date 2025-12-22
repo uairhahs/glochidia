@@ -91,6 +91,9 @@ jobs:
       - name: Install build dependencies
         run: apk add --no-cache git musl-dev file cmake make gcc g++ linux-headers bash
 
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh
+
       - name: Cache cargo registry
         if: steps.cache-binary.outputs.cache-hit != 'true'
         uses: actions/cache@v4
@@ -166,6 +169,9 @@ jobs:
 
       - name: Install build dependencies
         run: apt-get update && apt-get install -y build-essential libicu-dev git pkg-config
+
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh
 
       - name: Fetch latest release version
         id: fetch-version
