@@ -48,11 +48,17 @@ if [[ -f "${BUILD_DIR}/${TOOL_NAME}" ]]; then
 	echo "Found binary: ${BUILD_DIR}/${TOOL_NAME}"
 elif [[ ${TOOL_NAME} == "ble.sh" ]]; then
 	# Special handling for ble.sh
-	if [[ -d "${BUILD_DIR}/out" ]]; then
+	if [[ -d "${BUILD_DIR}/project/out" ]]; then
+		echo "Found ble.sh build output: ${BUILD_DIR}/project/out"
+		tar -czf "./${TOOL_NAME}-bin" -C "${BUILD_DIR}/project/out" .
+		echo "Created ble.sh installation tarball"
+		# Extract version using --version flag
+		VERSION=$(cd "${BUILD_DIR}/project/out" && bash ble.sh --version 2>/dev/null | grep -o -E "([0-9]+\.?)+[0-9]+(-[a-zA-Z0-9+]+)?" | head -n1 || echo "")
+		echo "Extracted version from ble.sh --version: '${VERSION}'"
+	elif [[ -d "${BUILD_DIR}/out" ]]; then
 		echo "Found ble.sh build output: ${BUILD_DIR}/out"
 		tar -czf "./${TOOL_NAME}-bin" -C "${BUILD_DIR}/out" .
 		echo "Created ble.sh installation tarball"
-		# Extract version using --version flag
 		VERSION=$(cd "${BUILD_DIR}/out" && bash ble.sh --version 2>/dev/null | grep -o -E "([0-9]+\.?)+[0-9]+(-[a-zA-Z0-9+]+)?" | head -n1 || echo "")
 		echo "Extracted version from ble.sh --version: '${VERSION}'"
 	else
