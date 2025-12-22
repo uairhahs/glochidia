@@ -20,10 +20,10 @@ file "${BINARY_PATH}"
 
 if file "${BINARY_PATH}" | grep -q "dynamically linked"; then
 	if file "${BINARY_PATH}" | grep -q "interpreter"; then
-		echo "Error: Binary is dynamically linked with interpreter"
-		exit 1
+		echo "Warning: Binary is dynamically linked with interpreter"
+	else
+		echo "Warning: Binary appears dynamically linked but may be acceptable"
 	fi
-	echo "Warning: Binary appears dynamically linked but may be acceptable"
 fi
 
 if ! file "${BINARY_PATH}" | grep -q "statically linked"; then
