@@ -232,9 +232,28 @@ For details, see [COPYING](COPYING) and [SOURCES.txt](SOURCES.txt).
 
 Contributions are welcome! To add a new tool:
 
-1. Test the build locally using `grow_glochidium.sh`
-2. Update [SOURCES.txt](SOURCES.txt) with source provenance
-3. Submit a pull request with build instructions
+1. Add tool metadata to `scripts/tools-metadata.json`
+2. Test the build locally using `grow_glochidium.sh`
+3. Update [SOURCES.txt](SOURCES.txt) with source provenance
+4. Submit a pull request with build instructions
+
+### Adding New Tools
+
+To add a new tool, edit `scripts/tools-metadata.json`:
+
+```json
+{
+  "newtool": {
+    "description": "New tool description",
+    "license": "MIT",
+    "source_url": "https://github.com/example/newtool",
+    "build_type": "alpine",
+    "source_sha256": "optional_checksum_for_tarballs"
+  }
+}
+```
+
+Then add the tool to the GitHub Actions workflow matrix.
 
 ## Support
 
@@ -280,11 +299,22 @@ DEPLOY_USER=user DEPLOY_HOST=192.168.1.100 DEPLOY_PATH=/DATA/bin \
 
 ```txt
 glochidia/
-├── grow_glochidium.sh          # Universal native build & deploy script
-├── alpine-build.sh             # Container-side build executor (all projects)
-├── Examples.md                 # Build examples for various projects
-├── .gitignore                  # Git ignore rules
-└── README.md                   # This file
+├── scripts/
+│   ├── build-rust-tool.sh         # Rust build automation
+│   ├── build-c-tool.sh            # C/C++ build automation
+│   ├── fetch-version.sh           # Version fetching logic
+│   ├── verify-binary.sh           # Binary verification
+│   ├── extract-binary-version.sh  # Version extraction
+│   ├── finalize-version.sh        # Version metadata handling
+│   ├── generate-manifest.py       # Manifest generation
+│   ├── generate-release-body.py   # Release notes generation
+│   ├── tools-metadata.json        # Tool metadata configuration
+│   └── README.md                  # Scripts documentation
+├── grow_glochidium.sh             # Universal native build & deploy script
+├── alpine-build.sh                # Container-side build executor
+├── Examples.md                    # Build examples for various projects
+├── .gitignore                     # Git ignore rules
+└── README.md                      # This file
 ```
 
 ## Technical Details
