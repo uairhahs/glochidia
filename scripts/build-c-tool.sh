@@ -44,7 +44,7 @@ if [[ -f "${BUILD_DIR}/${TOOL_NAME}" ]]; then
 elif [[ -f "${BUILD_DIR}/${TOOL_NAME}.sh" ]]; then
 	cp "${BUILD_DIR}/${TOOL_NAME}.sh" "./${TOOL_NAME}-bin"
 	chmod +x "./${TOOL_NAME}-bin"
-	VERSION=$(grep -o -E "([0-9]+\.?)+[0-9]+" "${BUILD_DIR}/${TOOL_NAME}.sh" | head -n1 | sed 's/^v//')
+	VERSION=$(grep -o -E "([0-9]+\.?)+[0-9]+" "${BUILD_DIR}/${TOOL_NAME}.sh" | head -n1 | sed 's/^v//' || echo "")
 else
 	echo "Error: Binary not found in ${BUILD_DIR}"
 	ls -la "${BUILD_DIR}" || true

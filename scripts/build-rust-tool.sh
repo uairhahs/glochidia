@@ -20,7 +20,7 @@ echo "Building ${TOOL_NAME}..."
 if [[ -n ${WORKING_DIR} ]]; then
 	# Build from local working directory
 	cd "${WORKING_DIR}"
-	cargo build --release --target x86_64-unknown-linux-musl
+	cargo build --release
 	strip "target/x86_64-unknown-linux-musl/release/${TOOL_NAME}"
 	cp "target/x86_64-unknown-linux-musl/release/${TOOL_NAME}" "../${TOOL_NAME}-bin"
 
@@ -41,7 +41,13 @@ elif [[ ${SOURCE_URL} == *"github.com"* ]]; then
 	BUILD_DIR="/tmp/build_${TOOL_NAME}"
 	git clone --depth 1 --branch "${FETCHED_VERSION}" "${SOURCE_URL}" "${BUILD_DIR}"
 	cd "${BUILD_DIR}"
-	eval "${BUILD_CMD}"
+
+	# Use provided build command or default Rust build
+	if [[ -n ${BUILD_CMD} ]]; then
+		eval "${BUILD_CMD}"
+	else
+		cargo build --release
+	fi
 
 	# Find and copy binary
 	BINARY_NAME="${BINARY_NAME:-${TOOL_NAME}}"
