@@ -17,10 +17,10 @@ fi
 
 echo "Building ${TOOL_NAME}..."
 
-if [[ -n ${WORKING_DIR} ]]; then
+if [[ -n ${WORKING_DIR} ]] && [[ ${WORKING_DIR} != "" ]]; then
 	# Build from local working directory
 	cd "${WORKING_DIR}"
-	cargo build --release
+	cargo build --release --target x86_64-unknown-linux-musl
 	strip "target/x86_64-unknown-linux-musl/release/${TOOL_NAME}"
 	cp "target/x86_64-unknown-linux-musl/release/${TOOL_NAME}" "../${TOOL_NAME}-bin"
 
@@ -46,7 +46,7 @@ elif [[ ${SOURCE_URL} == *"github.com"* ]]; then
 	if [[ -n ${BUILD_CMD} ]]; then
 		eval "${BUILD_CMD}"
 	else
-		cargo build --release
+		cargo build --release --target x86_64-unknown-linux-musl
 	fi
 
 	# Find and copy binary
