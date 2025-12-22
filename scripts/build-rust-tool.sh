@@ -56,6 +56,10 @@ elif [[ ${SOURCE_URL} == *"github.com"* ]]; then
 
 	# Use provided build command or default Rust build
 	if [[ -n ${BUILD_CMD} ]]; then
+		# If build command doesn't specify target, add it
+		if [[ ${BUILD_CMD} == *"cargo build"* ]] && [[ ${BUILD_CMD} != *"--target"* ]]; then
+			BUILD_CMD="${BUILD_CMD} --target ${TARGET}"
+		fi
 		eval "${BUILD_CMD}"
 	else
 		cargo build --release --target "${TARGET}"
@@ -63,9 +67,16 @@ elif [[ ${SOURCE_URL} == *"github.com"* ]]; then
 
 	# Find and copy binary
 	BINARY_NAME="${BINARY_NAME:-${TOOL_NAME}}"
-	TARGET_PATH="target/${TARGET}/release/${BINARY_NAME}"
+	if [[ ${TARGET} == "x86_64-unknown-linux-gnu" ]]; then
+		TARGET_PATH="target/release/${BINARY_NAME}"
+	else
+		TARGET_PATH="target/${TARGET}/release/${BINARY_NAME}"
+	fi
 	echo "Looking for binary: ${TARGET_PATH}"
-	ls -la "target/${TARGET}/release/" || true
+	ls -la "target/release/" || true
+	if [[ ${TARGET} != "x86_64-unknown-linux-gnu" ]]; then
+		ls -la "target/${TARGET}/release/" || true
+	fi
 
 	if [[ -f ${TARGET_PATH} ]]; then
 		strip "${TARGET_PATH}"
