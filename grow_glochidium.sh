@@ -13,16 +13,6 @@ PROJECT_DIR="${BUILD_DIR}/project"
 TARBALL_FILE=""
 CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-podman}"
 
-# ============ CONFIGURATION ============
-# Check if deployment variables are set, prompt if not
-if [[ -z ${DEPLOY_USER} ]]; then
-	read -rp "Enter DEPLOY_USER: " DEPLOY_USER
-	[[ -z ${DEPLOY_USER} ]] && {
-		echo "Error: DEPLOY_USER is required"
-		exit 1
-	}
-fi
-
 # Verify SSH key setup before proceeding
 verify_ssh_setup() {
 	local user="${1}"
@@ -37,28 +27,44 @@ verify_ssh_setup() {
 	return 0
 }
 
-if [[ -z ${DEPLOY_HOST} ]]; then
-	read -rp "Enter DEPLOY_HOST: " DEPLOY_HOST
-	[[ -z ${DEPLOY_HOST} ]] && {
-		echo "Error: DEPLOY_HOST is required"
-		exit 1
-	}
-fi
-
-if [[ -z ${DEPLOY_PATH} ]]; then
-	read -rp "Enter DEPLOY_PATH: " DEPLOY_PATH
-	[[ -z ${DEPLOY_PATH} ]] && {
-		echo "Error: DEPLOY_PATH is required"
-		exit 1
-	}
-fi
-
+# ============ CONFIGURATION ============
 # Verify SSH connectivity before proceeding (only for SSH deployment)
 DEPLOY_METHOD="${DEPLOY_METHOD:-ssh}"
+
 if [[ ${DEPLOY_METHOD} == "ssh" ]]; then
+	# Check if deployment variables are set, prompt if not
+	if [[ -z ${DEPLOY_USER} ]]; then
+		read -rp "Enter DEPLOY_USER: " DEPLOY_USER
+		[[ -z ${DEPLOY_USER} ]] && {
+			echo "Error: DEPLOY_USER is required"
+			exit 1
+		}
+	fi
+
+	if [[ -z ${DEPLOY_HOST} ]]; then
+		read -rp "Enter DEPLOY_HOST: " DEPLOY_HOST
+		[[ -z ${DEPLOY_HOST} ]] && {
+			echo "Error: DEPLOY_HOST is required"
+			exit 1
+		}
+	fi
+
+	if [[ -z ${DEPLOY_PATH} ]]; then
+		read -rp "Enter DEPLOY_PATH: " DEPLOY_PATH
+		[[ -z ${DEPLOY_PATH} ]] && {
+			echo "Error: DEPLOY_PATH is required"
+			exit 1
+		}
+	fi
+
 	echo "Verifying SSH connectivity..."
 	verify_ssh_setup "${DEPLOY_USER}" "${DEPLOY_HOST}"
 	echo "SSH connectivity verified"
+else
+	# Set dummy values for non-SSH deployment
+	DEPLOY_USER="ci"
+	DEPLOY_HOST="localhost"
+	DEPLOY_PATH="/tmp/ci"
 fi
 echo
 
@@ -90,13 +96,16 @@ if [[ ${REPO_URL} =~ \.tar\.(gz|xz|bz2)$ || ${REPO_URL} =~ \.tgz$ ]]; then
 	echo "Source extracted to ${PROJECT_DIR}"
 else
 	echo "1. Cloning repository..."
-	git clone "${REPO_URL}" "${PROJECT_DIR}" 2>&1 | grep -E "(Cloning|done)" || true
+	if ! git clone "${REPO_URL}" "${PROJECT_DIR}"; then
+		echo "Error: Failed to clone repository ${REPO_URL}"
+		exit 1
+	fi
 	echo "Repository cloned to ${PROJECT_DIR}"
 	if [[ ! -d ${PROJECT_DIR} ]]; then
 		echo "Error: Project directory was not created at ${PROJECT_DIR}"
 		exit 1
 	fi
-	entry_count=$(find "${PROJECT_DIR}" -maxdepth 0 | wc -l) || true
+	entry_count=$(find "${PROJECT_DIR}" -maxdepth 1 | wc -l) || true
 	echo "Verified: ${PROJECT_DIR} exists (${entry_count} entries)"
 fi
 
@@ -221,8 +230,7 @@ if [[ ${DEPLOY_METHOD} == "ssh" ]]; then
 	fi
 
 	echo "Creating deployment directory..."
-	if ssh "${DEPLOY_USER}@${DEPLOY_HOST}" "mkdir -p \"${DEPLOY_PATH}\"" &&
-		ssh "${DEPLOY_USER}@${DEPLOY_HOST}" "test -d \"${DEPLOY_PATH}\""; then
+	if ssh "${DEPLOY_USER}@${DEPLOY_HOST}" 'sh -c "mkdir -p \"\$1\" && test -d \"\$1\""' -- "${DEPLOY_PATH}"; then
 		:
 	else
 		echo "Error: Failed to create deployment directory on remote device"

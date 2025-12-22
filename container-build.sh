@@ -40,53 +40,58 @@ eval "${BUILD_COMMAND}"
 echo "Finding artifact..."
 ARTIFACT=""
 
-# Search strategy: look for executables with preference order (generic build systems first)
-SEARCH_DIRS=". bin out build target/release target/"${TARGET}"/release"
+# Special handling for ble.sh - use the build output, not wrapper
+if [ "${ARTIFACT_NAME}" = "ble.sh" ] && [ -f "out/ble.sh" ]; then
+	ARTIFACT="out/ble.sh"
+else
+	# Search strategy: look for executables with preference order (generic build systems first)
+	SEARCH_DIRS=". bin out build target/release target/${TARGET}/release"
 
-for dir in ${SEARCH_DIRS}; do
-	if [ -d "${dir}" ]; then
-		# First try: exact name match
-		if [ -f "${dir}/${ARTIFACT_NAME}" ] && [ -x "${dir}/${ARTIFACT_NAME}" ]; then
-			ARTIFACT="${dir}/${ARTIFACT_NAME}"
-			break
+	for dir in ${SEARCH_DIRS}; do
+		if [ -d "${dir}" ]; then
+			# First try: exact name match
+			if [ -f "${dir}/${ARTIFACT_NAME}" ] && [ -x "${dir}/${ARTIFACT_NAME}" ]; then
+				ARTIFACT="${dir}/${ARTIFACT_NAME}"
+				break
+			fi
+
+			# Second try: name with common extensions
+			for ext in "" ".sh" ".bin"; do
+				if [ -f "${dir}/${ARTIFACT_NAME}${ext}" ] && [ -x "${dir}/${ARTIFACT_NAME}${ext}" ]; then
+					ARTIFACT="${dir}/${ARTIFACT_NAME}${ext}"
+					break 2
+				fi
+			done
 		fi
+	done
 
-		# Second try: name with common extensions
-		for ext in "" ".sh" ".bin"; do
-			if [ -f "${dir}/${ARTIFACT_NAME}${ext}" ] && [ -x "${dir}/${ARTIFACT_NAME}${ext}" ]; then
-				ARTIFACT="${dir}/${ARTIFACT_NAME}${ext}"
-				break 2
+	# If exact match not found, try partial matches
+	if [ -z "${ARTIFACT}" ]; then
+		for dir in ${SEARCH_DIRS}; do
+			if [ -d "${dir}" ]; then
+				# Third try: find executable that contains the artifact name
+				FOUND=$(find "${dir}" -maxdepth 2 -type f -executable -name "*${ARTIFACT_NAME}*" 2>/dev/null | head -1)
+				if [ -n "${FOUND}" ]; then
+					ARTIFACT="${FOUND}"
+					break
+				fi
 			fi
 		done
 	fi
-done
 
-# If exact match not found, try partial matches
-if [ -z "${ARTIFACT}" ]; then
-	for dir in ${SEARCH_DIRS}; do
-		if [ -d "${dir}" ]; then
-			# Third try: find executable that contains the artifact name
-			FOUND=$(find "${dir}" -maxdepth 2 -type f -executable -name "*${ARTIFACT_NAME}*" 2>/dev/null | head -1)
-			if [ -n "${FOUND}" ]; then
-				ARTIFACT="${FOUND}"
-				break
+	# Last resort: find any reasonable executable
+	if [ -z "${ARTIFACT}" ]; then
+		for dir in ${SEARCH_DIRS}; do
+			if [ -d "${dir}" ]; then
+				# Find any executable (prefer non-test, non-example binaries)
+				FOUND=$(find "${dir}" -maxdepth 2 -type f \( -executable -o -name "*.sh" \) ! -name "*test*" ! -name "*example*" ! -name "*demo*" ! -name "*example*" 2>/dev/null | head -1)
+				if [ -n "${FOUND}" ]; then
+					ARTIFACT="${FOUND}"
+					break
+				fi
 			fi
-		fi
-	done
-fi
-
-# Last resort: find any reasonable executable
-if [ -z "${ARTIFACT}" ]; then
-	for dir in ${SEARCH_DIRS}; do
-		if [ -d "${dir}" ]; then
-			# Find any executable (prefer non-test, non-example binaries)
-			FOUND=$(find "${dir}" -maxdepth 2 -type f \( -executable -o -name "*.sh" \) ! -name "*test*" ! -name "*example*" ! -name "*demo*" 2>/dev/null | head -1)
-			if [ -n "${FOUND}" ]; then
-				ARTIFACT="${FOUND}"
-				break
-			fi
-		fi
-	done
+		done
+	fi
 fi
 
 if [ -z "${ARTIFACT}" ]; then
