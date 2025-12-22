@@ -9,23 +9,24 @@ BUILD_CMD="${4-}"
 BINARY_NAME="${5-}"
 FETCHED_VERSION="${6-}"
 REPO_VERSION="${7:-1.0.0}"
+TARGET="${8:-x86_64-unknown-linux-musl}"
 
 if [[ -z ${TOOL_NAME} ]] || [[ -z ${SOURCE_URL} ]]; then
-	echo "Usage: $0 <tool_name> <source_url> [working_dir] [build_cmd] [binary_name] [fetched_version] [repo_version]"
+	echo "Usage: $0 <tool_name> <source_url> [working_dir] [build_cmd] [binary_name] [fetched_version] [repo_version] [target]"
 	exit 1
 fi
 
-echo "Building ${TOOL_NAME}..."
+echo "Building ${TOOL_NAME} with target ${TARGET}..."
 
 if [[ -n ${WORKING_DIR} ]] && [[ ${WORKING_DIR} != "" ]]; then
 	# Build from local working directory
 	cd "${WORKING_DIR}"
-	cargo build --release --target x86_64-unknown-linux-musl
-	strip "target/x86_64-unknown-linux-musl/release/${TOOL_NAME}"
-	cp "target/x86_64-unknown-linux-musl/release/${TOOL_NAME}" "../${TOOL_NAME}-bin"
+	cargo build --release --target "${TARGET}"
+	strip "target/${TARGET}/release/${TOOL_NAME}"
+	cp "target/${TARGET}/release/${TOOL_NAME}" "../${TOOL_NAME}-bin"
 
 	# Extract version from built binary
-	VERSION_OUTPUT=$(target/x86_64-unknown-linux-musl/release/"${TOOL_NAME}" --version 2>&1 || echo "")
+	VERSION_OUTPUT=$(target/"${TARGET}"/release/"${TOOL_NAME}" --version 2>&1 || echo "")
 	VERSION=$(echo "${VERSION_OUTPUT}" | sed -n 's/.*\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p' | head -n1)
 
 	if [[ -z ${VERSION} ]]; then
@@ -52,18 +53,20 @@ elif [[ ${SOURCE_URL} == *"github.com"* ]]; then
 	if [[ -n ${BUILD_CMD} ]]; then
 		eval "${BUILD_CMD}"
 	else
-		cargo build --release --target x86_64-unknown-linux-musl
+		cargo build --release --target "${TARGET}"
 	fi
 
 	# Find and copy binary
 	BINARY_NAME="${BINARY_NAME:-${TOOL_NAME}}"
-	echo "Looking for binary: target/x86_64-unknown-linux-musl/release/${BINARY_NAME}"
-	ls -la target/x86_64-unknown-linux-musl/release/ || true
-	if [[ -f "target/x86_64-unknown-linux-musl/release/${BINARY_NAME}" ]]; then
-		strip "target/x86_64-unknown-linux-musl/release/${BINARY_NAME}"
+	TARGET_PATH="target/${TARGET}/release/${BINARY_NAME}"
+	echo "Looking for binary: ${TARGET_PATH}"
+	ls -la "target/${TARGET}/release/" || true
+
+	if [[ -f ${TARGET_PATH} ]]; then
+		strip "${TARGET_PATH}"
 
 		# Extract version from built binary
-		VERSION_OUTPUT=$(target/x86_64-unknown-linux-musl/release/"${BINARY_NAME}" --version 2>&1 || echo "")
+		VERSION_OUTPUT=$("${TARGET_PATH}" --version 2>&1 || echo "")
 		VERSION=$(echo "${VERSION_OUTPUT}" | sed -n 's/.*\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p' | head -n1)
 
 		if [[ -z ${VERSION} ]]; then
@@ -73,7 +76,7 @@ elif [[ ${SOURCE_URL} == *"github.com"* ]]; then
 		VERSION=${VERSION#v}
 		echo "${VERSION:-${FETCHED_VERSION}-${REPO_VERSION}}" >"${TOOL_NAME}.version"
 		echo "Version extracted for ${TOOL_NAME}: ${VERSION:-${FETCHED_VERSION}}"
-		cp "target/x86_64-unknown-linux-musl/release/${BINARY_NAME}" "${TOOL_NAME}-bin"
+		cp "${TARGET_PATH}" "${TOOL_NAME}-bin"
 	else
 		echo "Error: Binary not found at expected path"
 		exit 1
