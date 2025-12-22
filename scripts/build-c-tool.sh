@@ -49,8 +49,10 @@ if [[ -f "${BUILD_DIR}/${TOOL_NAME}" ]]; then
 elif [[ -f "${BUILD_DIR}/${TOOL_NAME}.sh" ]]; then
 	cp "${BUILD_DIR}/${TOOL_NAME}.sh" "./${TOOL_NAME}-bin"
 	chmod +x "./${TOOL_NAME}-bin"
-	VERSION=$(grep -o -E "([0-9]+\.?)+[0-9]+" "${BUILD_DIR}/${TOOL_NAME}.sh" | head -n1 | sed 's/^v//' || echo "")
 	echo "Found shell script: ${BUILD_DIR}/${TOOL_NAME}.sh"
+	echo "Attempting to extract version from shell script..."
+	VERSION=$(grep -o -E "([0-9]+\.?)+[0-9]+" "${BUILD_DIR}/${TOOL_NAME}.sh" | head -n1 | sed 's/^v//' || echo "")
+	echo "Extracted version from script: '${VERSION}'"
 else
 	echo "Error: Binary not found in ${BUILD_DIR}"
 	echo "Contents of build directory:"
