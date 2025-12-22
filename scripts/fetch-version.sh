@@ -36,7 +36,7 @@ fetch_github_version() {
 }
 
 # Main logic
-if [[ ${SOURCE_URL} == *"github.com"* ]] && [[ -n ${REPO_URL} ]]; then
+if [[ ${SOURCE_URL} == *"github.com"* ]] && [[ -n ${REPO_URL} ]] && [[ ${REPO_URL} != "${SOURCE_URL}" ]]; then
 	REPO_PATH=$(echo "${REPO_URL}" | sed 's|https://github.com/||' | sed 's|\.git$||')
 
 	VERSION=$(fetch_github_version "${REPO_PATH}")
