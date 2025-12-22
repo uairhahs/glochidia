@@ -46,6 +46,19 @@ if [[ -f "${BUILD_DIR}/${TOOL_NAME}" ]]; then
 	chmod +x "./${TOOL_NAME}-bin"
 	VERSION=$(bash scripts/extract-binary-version.sh "./${TOOL_NAME}-bin" "${CONFIGURED_VERSION}")
 	echo "Found binary: ${BUILD_DIR}/${TOOL_NAME}"
+elif [[ ${TOOL_NAME} == "ble.sh" ]]; then
+	# Special handling for ble.sh
+	if [[ -d "${BUILD_DIR}/out" ]]; then
+		echo "Found ble.sh build output: ${BUILD_DIR}/out"
+		tar -czf "./${TOOL_NAME}-bin" -C "${BUILD_DIR}/out" .
+		echo "Created ble.sh installation tarball"
+		# Extract version using --version flag
+		VERSION=$(cd "${BUILD_DIR}/out" && bash ble.sh --version 2>/dev/null | grep -o -E "([0-9]+\.?)+[0-9]+(-[a-zA-Z0-9+]+)?" | head -n1 || echo "")
+		echo "Extracted version from ble.sh --version: '${VERSION}'"
+	else
+		echo "Error: ble.sh build output not found in ${BUILD_DIR}"
+		exit 1
+	fi
 elif [[ -f "${BUILD_DIR}/${TOOL_NAME}.sh" ]]; then
 	cp "${BUILD_DIR}/${TOOL_NAME}.sh" "./${TOOL_NAME}-bin"
 	chmod +x "./${TOOL_NAME}-bin"
@@ -75,9 +88,11 @@ if [[ -z ${VERSION} ]]; then
 fi
 
 # Clean version and write to file
-VERSION=$(echo "${VERSION}" | tr -d '\n\r' | xargs | sed 's/^v//' || echo "${VERSION}")
-echo "${VERSION}" >"${TOOL_NAME}.version"
-echo "Version for ${TOOL_NAME}: ${VERSION}"
+echo "Cleaning version: '${VERSION}'"
+CLEANED_VERSION=$(echo "${VERSION}" | tr -d '\n\r' | xargs | sed 's/^v//' 2>/dev/null || echo "${VERSION}")
+echo "Cleaned version: '${CLEANED_VERSION}'"
+echo "${CLEANED_VERSION}" >"${TOOL_NAME}.version"
+echo "Version for ${TOOL_NAME}: ${CLEANED_VERSION}"
 echo "Build completed successfully"
 
 # Ensure we exit with success
