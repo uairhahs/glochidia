@@ -263,7 +263,7 @@ project's code is mere aggregation):
 For the GPL-licensed binaries, this project complies with GPL requirements by:
 
 ✓ **Source Availability** - All source URLs documented in [SOURCES.txt](SOURCES.txt)  
-✓ **License Distribution** - Full texts in [licenses/](licenses/) directory  
+✓ **License Distribution** - Full texts attached to every release (GPL texts also in [licenses/](licenses/))  
 ✓ **Build Reproducibility** - Complete build scripts in this repository  
 ✓ **No Additional Restrictions** - Original GPL terms preserved
 

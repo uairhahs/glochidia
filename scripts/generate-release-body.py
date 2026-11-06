@@ -60,9 +60,9 @@ def main():
         f.write("- `SOURCES.txt` - Source code provenance\n")
         f.write("- `COPYING` - License notice and GPL compliance details\n")
         f.write(
-            "- `licenses/` - Full license texts: `<tool>-LICENSE.txt` with each third-party "
-            "tool's own license and copyright notices, the GPL texts, and MIT and Apache-2.0 "
-            "for gpm and set_locale\n\n"
+            "- License texts, attached below: `<tool>-LICENSE.txt` with each third-party "
+            "tool's own license and copyright notices, `GPL-2.0.txt` and `GPL-3.0.txt`, and "
+            "`LICENSE-MIT` and `LICENSE-APACHE` for gpm and set_locale\n\n"
         )
         f.write("### Build Information\n")
         f.write(f"- Built: {build_info}\n")
