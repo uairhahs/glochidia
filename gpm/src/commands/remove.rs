@@ -112,7 +112,7 @@ pub fn run(config: &Config, tool_patterns: &[String], all: bool) -> Result<()> {
     Ok(())
 }
 
-fn get_installed_tools(config: &Config) -> Result<Vec<String>> {
+pub(crate) fn get_installed_tools(config: &Config) -> Result<Vec<String>> {
     let mut tools = Vec::new();
 
     if !config.install_dir.exists() {

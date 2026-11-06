@@ -62,11 +62,16 @@ gpm list
 gpm list-remote
 ```
 
-### Upgrade a tool
+### Upgrade tools
 
 ```bash
-gpm upgrade starship
+gpm upgrade             # every installed tool (gpm included)
+gpm upgrade starship    # one tool
+gpm upgrade 'g*'        # installed tools matching a pattern
 ```
+
+`upgrade` always fetches a fresh manifest and only downloads tools whose published
+binary differs from the installed one. Use `gpm install` for tools not yet installed.
 
 ### Remove a tool
 

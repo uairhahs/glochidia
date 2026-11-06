@@ -58,6 +58,13 @@ pub enum Commands {
     /// Update manifest cache
     Update,
 
+    /// Upgrade installed tools to the latest manifest versions (all installed tools if
+    /// none are named). Always fetches a fresh manifest.
+    Upgrade {
+        /// Names or patterns of installed tools to upgrade (supports wildcards like 'g*')
+        tool_names: Vec<String>,
+    },
+
     /// Configure shell PATH for installed binaries
     #[command(name = "setup-path")]
     SetupPath,

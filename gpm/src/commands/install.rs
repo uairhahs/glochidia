@@ -104,13 +104,13 @@ pub fn run(config: &Config, tool_patterns: &[String], all: bool) -> Result<()> {
 }
 
 #[derive(Debug)]
-enum InstallResult {
+pub(crate) enum InstallResult {
     Installed,
     Upgraded,
     Skipped,
 }
 
-fn install_single_tool(
+pub(crate) fn install_single_tool(
     config: &Config,
     manifest: &crate::manifest::Manifest,
     tool_name: &str,
