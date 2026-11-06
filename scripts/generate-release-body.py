@@ -24,7 +24,7 @@ def main():
     with open("release-body.md", "w") as f:
         f.write("## Static Binaries for ZimaOS and other immutable Linux systems\n\n")
         f.write(
-            "Built from source with GPL compliance. Binaries are statically linked with musl "
+            "Built from source with license compliance. Binaries are statically linked with musl "
             "(msedit is linked against glibc for ZimaOS compatibility).\n\n"
         )
         f.write("### Available Tools\n")
@@ -58,8 +58,11 @@ def main():
         f.write("### Verification\n")
         f.write("- `manifest.json` - SHA256 checksums for all binaries\n")
         f.write("- `SOURCES.txt` - Source code provenance\n")
-        f.write("- `COPYING` - GPL compliance notice\n")
-        f.write("- `licenses/` - Full license texts\n\n")
+        f.write("- `COPYING` - License notice and GPL compliance details\n")
+        f.write(
+            "- `licenses/` - Full license texts (GPL texts for third-party binaries; "
+            "MIT and Apache-2.0 for gpm and set_locale)\n\n"
+        )
         f.write("### Build Information\n")
         f.write(f"- Built: {build_info}\n")
         f.write(f"- Commit: {commit}\n")

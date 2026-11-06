@@ -28,7 +28,7 @@ jobs:
         tool:
           - name: gpm
             description: "Glochidia Package Manager"
-            license: "GPL-2.0-or-later"
+            license: "MIT OR Apache-2.0"
             source_url: "https://github.com/${{ github.repository }}"
             working_dir: gpm
             version: ""
@@ -48,7 +48,7 @@ jobs:
             binary_name: ""
           - name: set_locale
             description: "Locale management utilities (set_locale, locale-gen)"
-            license: "GPL-2.0-or-later"
+            license: "MIT OR Apache-2.0"
             source_url: "https://github.com/${{ github.repository }}"
             working_dir: glochidia-locale
             binary_name: "set_locale"
@@ -434,7 +434,7 @@ jobs:
           echo "Versions collected:"
           ls -lh versions/ || true
 
-      - name: Download GPL licenses
+      - name: Download GPL licenses (for the GPL-licensed third-party binaries)
         run: |
           mkdir -p licenses
           if [ ! -f licenses/GPL-2.0.txt ]; then
@@ -458,6 +458,8 @@ jobs:
           cp SOURCES.txt release-files/
           cp COPYING release-files/
           cp -r licenses release-files/
+          # Glochidia's own code (gpm, set_locale, build tooling) is MIT OR Apache-2.0
+          cp LICENSE-MIT LICENSE-APACHE release-files/licenses/
 
       # Decided before the manifest is generated so its download URLs point at the
       # release actually being created (a v* tag push publishes under that tag)
