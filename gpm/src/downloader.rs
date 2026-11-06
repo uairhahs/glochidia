@@ -96,11 +96,7 @@ fn verify_sha256(path: &Path, expected: &str) -> Result<()> {
     let computed = file_sha256(path)?;
 
     if computed != expected {
-        anyhow::bail!(
-            "SHA256 mismatch: expected {}, got {}",
-            expected,
-            computed
-        );
+        anyhow::bail!("SHA256 mismatch: expected {}, got {}", expected, computed);
     }
 
     Ok(())

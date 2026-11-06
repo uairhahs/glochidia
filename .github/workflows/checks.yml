@@ -1,0 +1,85 @@
+name: Checks
+# Fast pre-merge checks (a few minutes). The full build of every tool runs in
+# build-release.yml, which also runs on pull requests without publishing.
+
+on:
+  pull_request:
+    branches:
+      - master
+  push:
+    branches:
+      - master
+
+concurrency:
+  group: checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  lint:
+    name: Lint workflows, shell and Python
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # The image bundles shellcheck, so the shell inside every run: step is checked too
+      - name: actionlint
+        run: docker run --rm -v "${PWD}:/repo" -w /repo rhysd/actionlint:1.7.12 -color
+
+      - name: shellcheck
+        run: |
+          shellcheck --version | head -2
+          shellcheck -S warning grow_glochidium.sh container-build.sh scripts/*.sh zpkg/*.sh
+
+      - name: Python scripts compile
+        run: python3 -m py_compile scripts/*.py
+
+      - name: JSON files parse
+        run: |
+          for f in scripts/tools-metadata.json manifest.schema.json manifest.example.json \
+            zpkg/raw/usr/share/casaos/modules/gpm.json; do
+            python3 -m json.tool "$f" >/dev/null && echo "ok: $f"
+          done
+
+  rust:
+    name: Rust (${{ matrix.crate }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        crate: [gpm, glochidia-locale]
+    # Same pinned toolchain as the release build
+    container:
+      image: rust:1.99-alpine3.24
+    defaults:
+      run:
+        working-directory: ${{ matrix.crate }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install toolchain components
+        run: |
+          apk add --no-cache musl-dev
+          rustup component add rustfmt clippy
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-checks-cargo-registry-${{ hashFiles(format('{0}/Cargo.lock', matrix.crate)) }}
+
+      - name: rustfmt
+        run: cargo fmt --check
+
+      - name: clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Tests
+        run: cargo test --locked

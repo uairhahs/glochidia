@@ -7,7 +7,7 @@ pub fn run(config: &Config) -> Result<()> {
     let entries = fs::read_dir(&config.install_dir)?;
 
     println!("Installed tools in {:?}:\n", config.install_dir);
-    println!("{:<20}\t{}", "NAME", "SIZE");
+    println!("{:<20}\tSIZE", "NAME");
     println!("{}", "-".repeat(40));
 
     let mut found_any = false;

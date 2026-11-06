@@ -1,8 +1,8 @@
-use anyhow::{Context, Result};
 use crate::config::Config;
 use crate::downloader;
 use crate::manifest;
 use crate::pattern;
+use anyhow::{Context, Result};
 
 pub fn run(config: &Config, tool_patterns: &[String], all: bool) -> Result<()> {
     let manifest = manifest::fetch_manifest(config)?;

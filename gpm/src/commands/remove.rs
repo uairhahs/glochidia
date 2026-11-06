@@ -8,7 +8,9 @@ use crate::pattern;
 pub fn run(config: &Config, tool_patterns: &[String], all: bool) -> Result<()> {
     // Removing everything must be asked for explicitly
     if !all && tool_patterns.is_empty() {
-        anyhow::bail!("No tools specified. Pass tool names or patterns, or use --all to remove all tools.");
+        anyhow::bail!(
+            "No tools specified. Pass tool names or patterns, or use --all to remove all tools."
+        );
     }
 
     // Get list of installed tools
