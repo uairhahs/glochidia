@@ -36,3 +36,7 @@ build/
 /gpm/gpm
 /gpm/gpm-bin
 /zpkg/raw/usr/bin/
+
+# Python bytecode (created by py_compile checks)
+__pycache__/
+*.pyc
