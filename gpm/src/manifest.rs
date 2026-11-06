@@ -82,6 +82,15 @@ fn load_cached_manifest(config: &Config) -> Result<Manifest> {
     Ok(manifest)
 }
 
+/// Discard the cached manifest and fetch a fresh copy.
+pub fn refresh_manifest(config: &Config) -> Result<Manifest> {
+    let cache_path = config.manifest_cache_path();
+    if cache_path.exists() {
+        fs::remove_file(&cache_path).context("Failed to remove cached manifest")?;
+    }
+    fetch_manifest(config)
+}
+
 pub fn find_tool<'a>(manifest: &'a Manifest, tool_name: &str) -> Option<&'a Tool> {
     manifest.tools.get(tool_name)
 }

@@ -4,6 +4,7 @@ mod list_remote;
 mod remove;
 mod setup_path;
 mod update;
+mod upgrade;
 
 use anyhow::Result;
 
@@ -24,6 +25,7 @@ pub fn execute(cli: Cli) -> Result<()> {
         Commands::ListRemote => list_remote::run(&config),
         Commands::Remove { tool_names, all } => remove::run(&config, &tool_names, all),
         Commands::Update => update::run(&config),
+        Commands::Upgrade { tool_names } => upgrade::run(&config, &tool_names),
 
         Commands::SetupPath => setup_path::run(&config),
     }
