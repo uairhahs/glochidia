@@ -3,6 +3,7 @@ mod commands;
 mod config;
 mod downloader;
 mod manifest;
+mod pattern;
 
 use anyhow::Result;
 

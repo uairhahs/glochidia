@@ -26,6 +26,14 @@ podman run --rm -v "$(pwd)/gpm:/src:Z" -w /src rust:alpine sh -c '
 # Binary at gpm/gpm-bin
 ```
 
+To package it as the ZimaOS RAW extension (needs `mksquashfs`):
+
+```bash
+bash zpkg/build-zpkg.sh gpm/gpm-bin gpm.raw
+```
+
+Built binaries and `gpm.raw` are not committed; CI builds and publishes them.
+
 Or for local development (may not work on ZimaOS):
 
 ```bash

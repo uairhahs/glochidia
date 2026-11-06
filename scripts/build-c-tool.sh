@@ -20,6 +20,14 @@ export DEPLOY_USER=ci
 export DEPLOY_HOST=localhost
 export DEPLOY_PATH=/tmp/ci
 
+# Build the resolved version (release tag or pinned commit) of git sources instead of the
+# default branch. Tarball sources are verified against SOURCE_SHA256 when it is set.
+if [[ ${SOURCE_URL} != *.tar.* ]] && [[ ${SOURCE_URL} != *.tgz ]] &&
+	[[ -n ${FETCHED_VERSION} ]] && [[ ${FETCHED_VERSION} != "unknown" ]]; then
+	export GIT_REF="${FETCHED_VERSION}"
+fi
+export SOURCE_SHA256="${SOURCE_SHA256-}"
+
 echo "Building ${TOOL_NAME} using grow_glochidium.sh..."
 
 # Run the build script, streaming output to the log while keeping a copy to extract BUILD_DIR.

@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use crate::config::Config;
 use crate::downloader;
 use crate::manifest;
+use crate::pattern;
 
 pub fn run(config: &Config, tool_patterns: &[String], all: bool) -> Result<()> {
     let manifest = manifest::fetch_manifest(config)?;
@@ -10,12 +11,7 @@ pub fn run(config: &Config, tool_patterns: &[String], all: bool) -> Result<()> {
     let patterns = if all || tool_patterns.is_empty() {
         vec!["*".to_string()]
     } else {
-        // Filter out patterns that look like shell-expanded paths (contain / or .)
-        tool_patterns
-            .iter()
-            .filter(|p| !p.contains('/') && !p.starts_with('.'))
-            .cloned()
-            .collect::<Vec<_>>()
+        pattern::sanitize(tool_patterns)
     };
 
     if patterns.is_empty() {
@@ -34,7 +30,7 @@ pub fn run(config: &Config, tool_patterns: &[String], all: bool) -> Result<()> {
         } else if pattern.contains('*') {
             // Simple wildcard matching
             for tool_name in manifest.tools.keys() {
-                if wildcard_match(pattern, tool_name) {
+                if pattern::wildcard_match(pattern, tool_name) {
                     tools_to_install.push(tool_name.clone());
                 }
             }
@@ -105,35 +101,6 @@ pub fn run(config: &Config, tool_patterns: &[String], all: bool) -> Result<()> {
     }
 
     Ok(())
-}
-
-fn wildcard_match(pattern: &str, text: &str) -> bool {
-    let pattern_chars: Vec<char> = pattern.chars().collect();
-    let text_chars: Vec<char> = text.chars().collect();
-
-    fn match_recursive(pattern: &[char], text: &[char], p_idx: usize, t_idx: usize) -> bool {
-        if p_idx == pattern.len() {
-            return t_idx == text.len();
-        }
-
-        if pattern[p_idx] == '*' {
-            // Try matching zero or more characters
-            for i in t_idx..=text.len() {
-                if match_recursive(pattern, text, p_idx + 1, i) {
-                    return true;
-                }
-            }
-            false
-        } else {
-            if t_idx < text.len() && pattern[p_idx] == text[t_idx] {
-                match_recursive(pattern, text, p_idx + 1, t_idx + 1)
-            } else {
-                false
-            }
-        }
-    }
-
-    match_recursive(&pattern_chars, &text_chars, 0, 0)
 }
 
 #[derive(Debug)]

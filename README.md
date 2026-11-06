@@ -447,7 +447,7 @@ Changes should:
 1. Maintain C99 compatibility
 2. Compile cleanly with `-Wall -Werror`
 3. Work when statically linked with musl
-4. Be tested with: `DEPLOY_USER=user DEPLOY_HOST=ip DEPLOY_PATH=/DATA/bin grow_glochidium.sh <repo> <binary>`
+4. Be tested with: `DEPLOY_USER=user DEPLOY_HOST=ip DEPLOY_PATH=/DATA/bin grow_glochidium.sh <repo> <binary>` (optionally set `GIT_REF` to build a specific tag or commit, and `SOURCE_SHA256` to verify a tarball)
 
 ## License
 
