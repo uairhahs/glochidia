@@ -1,7 +1,4 @@
 use anyhow::{Context, Result};
-use std::fs;
-use std::os::unix::fs::PermissionsExt;
-
 use crate::config::Config;
 use crate::downloader;
 use crate::manifest;
@@ -156,35 +153,23 @@ fn install_single_tool(
 
     let dest = config.install_dir.join(tool_name);
 
-    // Check if already installed and compare versions
-    let is_upgrade = if dest.exists() {
-        // Try to get current version
-        if let Ok(current_version) = get_installed_version(&dest) {
-            if current_version == tool.version {
+    // An installed file whose hash matches the manifest is up to date. Comparing hashes
+    // (rather than running the binary and parsing --version) works for every tool,
+    // including scripts and tools whose reported version differs from the manifest.
+    let is_upgrade = dest.exists();
+    if is_upgrade {
+        if let Ok(hash) = downloader::file_sha256(&dest) {
+            if hash == tool.sha256 {
                 println!(
                     "Tool '{}' v{} is already up to date",
                     tool_name, tool.version
                 );
                 return Ok(InstallResult::Skipped);
-            } else {
-                println!(
-                    "Upgrading {} from v{} to v{}",
-                    tool_name, current_version, tool.version
-                );
             }
-        } else {
-            println!(
-                "Reinstalling {} v{} (version check failed)",
-                tool_name, tool.version
-            );
         }
-
-        // Remove existing binary for upgrade
-        fs::remove_file(&dest).context("Failed to remove existing binary")?;
-        true
-    } else {
-        false
-    };
+        // The existing binary is left in place until the new one is downloaded and
+        // verified, so a failed download does not leave the tool missing.
+    }
 
     let action = if is_upgrade {
         "Upgrading"
@@ -195,15 +180,9 @@ fn install_single_tool(
     println!("  License: {}", tool.license);
     println!("  Size: {} bytes", tool.size);
 
-    // Download with retry and verification
+    // Download with retry and verification; replaces any existing binary atomically
     downloader::download_with_retry(&tool.url, &dest, &tool.sha256)
         .context("Failed to download tool")?;
-
-    // Make executable
-    let metadata = fs::metadata(&dest)?;
-    let mut permissions = metadata.permissions();
-    permissions.set_mode(0o755);
-    fs::set_permissions(&dest, permissions)?;
 
     let result = if is_upgrade {
         InstallResult::Upgraded
@@ -213,45 +192,4 @@ fn install_single_tool(
     let action_past = if is_upgrade { "upgraded" } else { "installed" };
     println!("Successfully {} {} to {:?}", action_past, tool_name, dest);
     Ok(result)
-}
-
-fn get_installed_version(binary_path: &std::path::Path) -> Result<String> {
-    use std::process::Command;
-
-    // Try common version flags
-    let version_flags = ["--version", "-V", "-v"];
-
-    for flag in &version_flags {
-        if let Ok(output) = Command::new(binary_path).arg(flag).output() {
-            if output.status.success() {
-                let version_output = String::from_utf8_lossy(&output.stdout);
-                // Extract version number (first sequence of digits and dots)
-                if let Some(version) = extract_version_number(&version_output) {
-                    return Ok(version);
-                }
-            }
-        }
-    }
-
-    anyhow::bail!("Could not determine version")
-}
-
-fn extract_version_number(text: &str) -> Option<String> {
-    // Simple version extraction - look for first number.number pattern
-    for line in text.lines() {
-        for word in line.split_whitespace() {
-            let cleaned = word.trim_start_matches('v');
-            if cleaned.chars().next()?.is_ascii_digit() && cleaned.contains('.') {
-                // Basic validation - starts with digit and contains dot
-                let version_part: String = cleaned
-                    .chars()
-                    .take_while(|c| c.is_ascii_digit() || *c == '.' || *c == '-')
-                    .collect();
-                if !version_part.is_empty() {
-                    return Some(version_part);
-                }
-            }
-        }
-    }
-    None
 }

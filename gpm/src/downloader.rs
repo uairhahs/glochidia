@@ -3,7 +3,8 @@ use indicatif::{ProgressBar, ProgressStyle};
 use sha2::{Digest, Sha256};
 use std::fs::{self, File};
 use std::io::{Read, Write};
-use std::path::Path;
+use std::os::unix::fs::PermissionsExt;
+use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
 
@@ -29,12 +30,15 @@ pub fn download_with_retry(url: &str, dest: &Path, expected_sha256: &str) -> Res
         }
     }
 
+    // Do not leave a partial download behind in the install directory
+    let _ = fs::remove_file(temp_path_for(dest));
     Err(last_error.unwrap())
 }
 
 fn download_file(url: &str, dest: &Path, expected_sha256: &str) -> Result<()> {
-    // Download to temporary file
-    let temp_path = dest.with_extension("tmp");
+    // Download to a temporary file next to the destination. The existing binary (if any)
+    // stays in place until the new one is verified, then gets replaced atomically.
+    let temp_path = temp_path_for(dest);
 
     let mut response = reqwest::blocking::get(url)
         .context("Failed to start download")?
@@ -68,16 +72,41 @@ fn download_file(url: &str, dest: &Path, expected_sha256: &str) -> Result<()> {
     pb.finish_with_message("Download complete");
     drop(file);
 
-    // Verify SHA256
-    verify_sha256(&temp_path, expected_sha256)?;
+    // Verify SHA256 and make executable before swapping it in
+    if let Err(e) = verify_sha256(&temp_path, expected_sha256) {
+        let _ = fs::remove_file(&temp_path);
+        return Err(e);
+    }
+    fs::set_permissions(&temp_path, fs::Permissions::from_mode(0o755))
+        .context("Failed to make downloaded file executable")?;
 
-    // Atomic move to final destination
+    // Atomic replace of the final destination
     fs::rename(&temp_path, dest).context("Failed to move file to final destination")?;
 
     Ok(())
 }
 
+fn temp_path_for(dest: &Path) -> PathBuf {
+    let mut name = dest.file_name().unwrap_or_default().to_os_string();
+    name.push(".gpm-download");
+    dest.with_file_name(name)
+}
+
 fn verify_sha256(path: &Path, expected: &str) -> Result<()> {
+    let computed = file_sha256(path)?;
+
+    if computed != expected {
+        anyhow::bail!(
+            "SHA256 mismatch: expected {}, got {}",
+            expected,
+            computed
+        );
+    }
+
+    Ok(())
+}
+
+pub fn file_sha256(path: &Path) -> Result<String> {
     let mut file = File::open(path)?;
     let mut hasher = Sha256::new();
     let mut buffer = [0u8; 8192];
@@ -90,16 +119,5 @@ fn verify_sha256(path: &Path, expected: &str) -> Result<()> {
         hasher.update(&buffer[..n]);
     }
 
-    let hash = hasher.finalize();
-    let computed = format!("{:x}", hash);
-
-    if computed != expected {
-        anyhow::bail!(
-            "SHA256 mismatch: expected {}, got {}",
-            expected,
-            computed
-        );
-    }
-
-    Ok(())
+    Ok(format!("{:x}", hasher.finalize()))
 }

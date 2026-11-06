@@ -1,9 +1,15 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::fs;
 
 use crate::config::Config;
+use crate::manifest;
 
 pub fn run(config: &Config, tool_patterns: &[String], all: bool) -> Result<()> {
+    // Removing everything must be asked for explicitly
+    if !all && tool_patterns.is_empty() {
+        anyhow::bail!("No tools specified. Pass tool names or patterns, or use --all to remove all tools.");
+    }
+
     // Get list of installed tools
     let installed_tools = get_installed_tools(config)?;
 
@@ -12,8 +18,8 @@ pub fn run(config: &Config, tool_patterns: &[String], all: bool) -> Result<()> {
         return Ok(());
     }
 
-    // Sanitize arguments - if all flag is set or no patterns provided, treat as "*"
-    let patterns = if all || tool_patterns.is_empty() {
+    // Sanitize arguments - the all flag is treated as "*"
+    let patterns = if all {
         vec!["*".to_string()]
     } else {
         // Filter out patterns that look like shell-expanded paths (contain / or .)
@@ -28,18 +34,33 @@ pub fn run(config: &Config, tool_patterns: &[String], all: bool) -> Result<()> {
         anyhow::bail!("No valid tool patterns specified. Use --all to remove all tools.");
     }
 
+    // Wildcards (including --all) only match files that are tools gpm manages: names listed
+    // in the manifest, excluding gpm itself. Other files in the install directory are never
+    // removed by a pattern; they can still be removed by exact name.
+    let wildcard_candidates = if patterns.iter().any(|p| p.contains('*')) {
+        let manifest = manifest::fetch_manifest(config)
+            .context("Failed to load manifest, which is needed to resolve wildcard patterns")?;
+        installed_tools
+            .iter()
+            .filter(|name| name.as_str() != "gpm" && manifest.tools.contains_key(name.as_str()))
+            .cloned()
+            .collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
+
     // Expand patterns to actual tool names
     let mut tools_to_remove = Vec::new();
 
     for pattern in &patterns {
         if pattern == "*" {
-            // Remove all installed tools
-            for tool_name in &installed_tools {
+            // Remove all installed managed tools
+            for tool_name in &wildcard_candidates {
                 tools_to_remove.push(tool_name.clone());
             }
         } else if pattern.contains('*') {
-            // Wildcard matching against installed tools
-            for tool_name in &installed_tools {
+            // Wildcard matching against installed managed tools
+            for tool_name in &wildcard_candidates {
                 if wildcard_match(pattern, tool_name) {
                     tools_to_remove.push(tool_name.clone());
                 }

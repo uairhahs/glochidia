@@ -64,7 +64,10 @@ gpm upgrade starship
 
 ```bash
 gpm remove ble.sh
+gpm remove 'g*'       # wildcard: only matches tools from the manifest
+gpm remove --all      # all manifest tools; gpm itself and other files are kept
 # Aliases: uninstall, rm
+# Running 'gpm remove' with no arguments is an error.
 ```
 
 ### Update manifest cache
