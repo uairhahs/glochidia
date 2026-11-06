@@ -49,6 +49,14 @@ if [[ -z ${BUILD_DIR} ]]; then
 fi
 
 echo "Detected BUILD_DIR: ${BUILD_DIR}"
+
+# Ship the upstream license with the binary (required by MIT, ISC, BSD and others)
+PROJECT_DIR=$(echo "${OUTPUT}" | grep "^Project directory:" | sed 's/^Project directory: //')
+if [[ -z ${PROJECT_DIR} ]]; then
+	echo "Error: Could not determine the source directory from script output"
+	exit 1
+fi
+bash scripts/collect-license.sh "${PROJECT_DIR}" "${TOOL_NAME}" "./${TOOL_NAME}.license"
 echo "Contents of build directory:"
 ls -la "${BUILD_DIR}" || true
 echo "Looking for files matching pattern:"

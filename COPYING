@@ -44,9 +44,11 @@ different licenses.
      starship   ISC                https://github.com/starship/starship
      msedit     MIT                https://github.com/microsoft/edit
 
-   The license of every distributed binary is also recorded in manifest.json
-   and shown by `gpm list-remote`. See SOURCES.txt for exact source
-   provenance and licenses/ for full license texts.
+   Each release's licenses/ directory contains <tool>-LICENSE.txt for every
+   binary above: the license and copyright notices from that tool's own
+   source, collected at build time. The license of every distributed binary
+   is also recorded in manifest.json and shown by `gpm list-remote`. See
+   SOURCES.txt for exact source provenance.
 
 ================================================================================
 GPL COMPLIANCE

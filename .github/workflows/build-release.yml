@@ -106,6 +106,7 @@ jobs:
           path: |
             ${{ matrix.tool.name }}-bin
             ${{ matrix.tool.name }}.version
+            ${{ matrix.tool.name }}.license
           key: ${{ runner.os }}-binary-${{ matrix.tool.name }}-${{ steps.fetch-version.outputs.cache_id }}-musl
 
       - name: Install build dependencies
@@ -173,6 +174,7 @@ jobs:
           path: |
             ${{ matrix.tool.name }}-bin
             ${{ matrix.tool.name }}.version
+            ${{ matrix.tool.name }}.license
 
   build-rust-gnu:
     name: Build Rust Tools (gnu)
@@ -236,6 +238,7 @@ jobs:
           path: |
             ${{ matrix.tool.name }}-bin
             ${{ matrix.tool.name }}.version
+            ${{ matrix.tool.name }}.license
           key: ${{ runner.os }}-binary-${{ matrix.tool.name }}-${{ steps.fetch-version.outputs.version }}-gnu
 
       - name: Cache cargo registry
@@ -293,6 +296,7 @@ jobs:
           path: |
             ${{ matrix.tool.name }}-bin
             ${{ matrix.tool.name }}.version
+            ${{ matrix.tool.name }}.license
 
   build-c-tools:
     name: Build C/C++ Tools
@@ -391,6 +395,7 @@ jobs:
           path: |
             ${{ matrix.tool.name }}-bin
             ${{ matrix.tool.name }}.version
+            ${{ matrix.tool.name }}.license
 
   generate-manifest:
     name: Generate Manifest and Create Release
@@ -428,6 +433,10 @@ jobs:
             if [ -f "$dir/set_locale.version" ]; then
               mv "$dir/set_locale.version" "versions/set_locale.version"
             fi
+            if [ -f "$dir/${tool}.license" ]; then
+              mkdir -p third-party-licenses
+              mv "$dir/${tool}.license" "third-party-licenses/${tool}-LICENSE.txt"
+            fi
           done
           chmod +x release-files/*
           ls -lh release-files/
@@ -458,6 +467,23 @@ jobs:
           cp SOURCES.txt release-files/
           cp COPYING release-files/
           cp -r licenses release-files/
+          # Upstream license of every third-party binary, collected at build time
+          cp third-party-licenses/*-LICENSE.txt release-files/licenses/
+          # Every third-party binary must ship with its license; gpm and set_locale are
+          # this repository's own code, covered by LICENSE-MIT and LICENSE-APACHE
+          missing=""
+          for bin in release-files/*; do
+            tool=$(basename "$bin")
+            case "$tool" in
+              gpm|set_locale|gpm.raw|SOURCES.txt|COPYING|licenses) continue ;;
+            esac
+            [ -f "release-files/licenses/${tool}-LICENSE.txt" ] || missing="$missing $tool"
+          done
+          if [ -n "$missing" ]; then
+            echo "Error: no license collected for:$missing"
+            exit 1
+          fi
+          ls -l release-files/licenses/
           # Glochidia's own code (gpm, set_locale, build tooling) is MIT OR Apache-2.0
           cp LICENSE-MIT LICENSE-APACHE release-files/licenses/
 
