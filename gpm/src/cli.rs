@@ -51,7 +51,7 @@ pub enum Commands {
         /// Names or patterns of tools to remove (supports wildcards like 'g*' or '*')
         tool_names: Vec<String>,
 
-        /// Remove all installed tools
+        /// Remove all tools installed from the manifest (gpm itself is kept)
         #[arg(short, long)]
         all: bool,
     },

@@ -68,25 +68,40 @@ jobs:
 
       - name: Fetch latest release version
         id: fetch-version
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TOOL_NAME: ${{ matrix.tool.name }}
+          SOURCE_URL: ${{ matrix.tool.source_url }}
+          REPO_URL: ${{ matrix.tool.repo_url }}
+          TOOL_VERSION: ${{ matrix.tool.version }}
+          GIT_REF: ${{ matrix.tool.git_ref }}
+          WORKING_DIR: ${{ matrix.tool.working_dir }}
         run: |
-          if [ -n "${{ matrix.tool.working_dir }}" ]; then
-            echo "version=${{ env.REPO_VERSION }}" >> $GITHUB_OUTPUT
+          if [ -n "${WORKING_DIR}" ]; then
+            # In-repo crate: version from Cargo.toml, cache keyed on the source contents
+            # so any source change triggers a rebuild
+            VERSION=$(sed -n 's/^version *= *"\(.*\)"/\1/p' "${WORKING_DIR}/Cargo.toml" | head -n1)
+            SRC_HASH=$(find "${WORKING_DIR}" -type f -not -path '*/target/*' | sort | xargs sha256sum | sha256sum | cut -c1-16)
+            CACHE_ID="${VERSION}-${SRC_HASH}"
           else
-            VERSION=$(sh scripts/fetch-version.sh \
-              "${{ matrix.tool.name }}" \
-              "${{ matrix.tool.source_url }}" \
-              "${{ matrix.tool.repo_url }}" \
-              "${{ matrix.tool.version }}" \
-              "${{ matrix.tool.git_ref }}")
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            VERSION=$(bash scripts/fetch-version.sh "${TOOL_NAME}" "${SOURCE_URL}" "${REPO_URL}" "${TOOL_VERSION}" "${GIT_REF}")
+            CACHE_ID="${VERSION}"
           fi
+          echo "version=${VERSION:-unknown}" >> "$GITHUB_OUTPUT"
+          echo "cache_id=${CACHE_ID}" >> "$GITHUB_OUTPUT"
 
+      # Skipped when the version is unknown, so the binary is rebuilt instead of reusing
+      # a cache entry that would never be invalidated
       - name: Cache compiled binary
         id: cache-binary
+        if: steps.fetch-version.outputs.version != 'unknown'
         uses: actions/cache@v4
         with:
-          path: ${{ matrix.tool.name }}-bin
-          key: ${{ runner.os }}-binary-${{ matrix.tool.name }}-${{ steps.fetch-version.outputs.version }}-musl
+          path: |
+            ${{ matrix.tool.name }}-bin
+            ${{ matrix.tool.name }}.version
+          key: ${{ runner.os }}-binary-${{ matrix.tool.name }}-${{ steps.fetch-version.outputs.cache_id }}-musl
 
       - name: Install build dependencies
         run: apk add --no-cache git musl-dev file cmake make gcc g++ linux-headers bash
@@ -176,20 +191,27 @@ jobs:
       - name: Fetch latest release version
         id: fetch-version
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TOOL_NAME: ${{ matrix.tool.name }}
+          SOURCE_URL: ${{ matrix.tool.source_url }}
+          REPO_URL: ${{ matrix.tool.repo_url }}
+          TOOL_VERSION: ${{ matrix.tool.version }}
+          GIT_REF: ${{ matrix.tool.git_ref }}
         run: |
-          VERSION=$(scripts/fetch-version.sh \
-            "${{ matrix.tool.name }}" \
-            "${{ matrix.tool.source_url }}" \
-            "${{ matrix.tool.repo_url }}" \
-            "${{ matrix.tool.version }}" \
-            "${{ matrix.tool.git_ref }}")
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          VERSION=$(scripts/fetch-version.sh "${TOOL_NAME}" "${SOURCE_URL}" "${REPO_URL}" "${TOOL_VERSION}" "${GIT_REF}")
+          echo "version=${VERSION:-unknown}" >> "$GITHUB_OUTPUT"
 
+      # Skipped when the version is unknown, so the binary is rebuilt instead of reusing
+      # a cache entry that would never be invalidated
       - name: Cache compiled binary
         id: cache-binary
+        if: steps.fetch-version.outputs.version != 'unknown'
         uses: actions/cache@v4
         with:
-          path: ${{ matrix.tool.name }}-bin
+          path: |
+            ${{ matrix.tool.name }}-bin
+            ${{ matrix.tool.name }}.version
           key: ${{ runner.os }}-binary-${{ matrix.tool.name }}-${{ steps.fetch-version.outputs.version }}-gnu
 
       - name: Cache cargo registry
@@ -288,6 +310,8 @@ jobs:
 
       - name: Fetch latest release version
         id: fetch-version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION=$(bash scripts/fetch-version.sh \
             "${{ matrix.tool.name }}" \
