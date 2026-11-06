@@ -601,3 +601,23 @@ jobs:
           done
           echo "Error: latest release was left as a draft"
           exit 1
+
+  # Single required status check for branch protection. GitHub treats a skipped required
+  # check as passing, and generate-manifest is skipped (not failed) when any build fails,
+  # so this job always runs and fails unless every build and the packaging succeeded.
+  build-gate:
+    name: Build gate
+    if: always()
+    needs: [build-rust-musl, build-rust-gnu, build-c-tools, generate-manifest]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every build and the packaging to succeed
+        env:
+          RESULTS: ${{ toJSON(needs.*.result) }}
+        run: |
+          echo "Job results: ${RESULTS}"
+          if ! jq -e 'length > 0 and all(. == "success")' <<<"${RESULTS}" >/dev/null; then
+            echo "Error: a build or packaging job did not succeed"
+            exit 1
+          fi
+          echo "All builds and packaging succeeded"
