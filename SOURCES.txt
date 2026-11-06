@@ -50,11 +50,12 @@ GIT_REF=<tag_or_commit> SOURCE_SHA256=<tarball_sha256> \
 
 ## License Compliance
 
-Full license texts are available in the licenses/ directory:
+Full license texts are attached to every release (the GPL texts are also in this
+repository's licenses/ directory):
 - GPL-2.0.txt - GNU General Public License version 2
 - GPL-3.0.txt - GNU General Public License version 3 (GNU Make, GNU Awk)
 - LICENSE-MIT, LICENSE-APACHE - Glochidia's own tools (gpm, set_locale)
-- <tool>-LICENSE.txt (in each release) - The license and copyright notices from each
+- <tool>-LICENSE.txt - The license and copyright notices from each
   third-party tool's own source, collected when it is built
 
 ## Redistribution Rights
@@ -62,7 +63,7 @@ Full license texts are available in the licenses/ directory:
 All tools listed here are free software, under GPL (GNU Make, GNU Awk) or permissive
 (MIT, ISC, BSD-3-Clause) licenses. This project:
 1. Provides complete source code information (this file)
-2. Includes full license texts (licenses/ directory)
+2. Includes full license texts (attached to every release)
 3. Makes build scripts publicly available (this repository)
 4. Does not add additional restrictions beyond the original licenses
 

@@ -573,8 +573,11 @@ jobs:
           make_latest: ${{ steps.release-version.outputs.version == 'latest' }}
           name: Release ${{ steps.release-version.outputs.version }}
           body_path: release-body.md
+          # Release assets are flat: release-files/* matches only top-level files, so the
+          # license texts in release-files/licenses/ must be listed explicitly
           files: |
             release-files/*
+            release-files/licenses/*
           draft: false
           prerelease: false
         env:
@@ -601,6 +604,27 @@ jobs:
           done
           echo "Error: latest release was left as a draft"
           exit 1
+
+      # Fail if anything prepared for the release did not end up as an asset, so a file
+      # cannot be silently dropped again (licenses/ was missing from every release before)
+      - name: Verify published assets
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.release-version.outputs.version }}
+        run: |
+          published=$(gh release view "${RELEASE_TAG}" -R "${GITHUB_REPOSITORY}" --json assets -q '.assets[].name')
+          missing=""
+          for f in release-files/* release-files/licenses/*; do
+            [ -f "$f" ] || continue
+            name=$(basename "$f")
+            grep -qxF "$name" <<<"${published}" || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "Error: not published:$missing"
+            exit 1
+          fi
+          echo "All $(find release-files -type f | wc -l) prepared files are published"
 
   # Single required status check for branch protection. GitHub treats a skipped required
   # check as passing, and generate-manifest is skipped (not failed) when any build fails,

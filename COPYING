@@ -44,9 +44,9 @@ different licenses.
      starship   ISC                https://github.com/starship/starship
      msedit     MIT                https://github.com/microsoft/edit
 
-   Each release's licenses/ directory contains <tool>-LICENSE.txt for every
-   binary above: the license and copyright notices from that tool's own
-   source, collected at build time. The license of every distributed binary
+   Every release has a <tool>-LICENSE.txt file attached for each binary
+   above: the license and copyright notices from that tool's own source,
+   collected at build time. The license of every distributed binary
    is also recorded in manifest.json and shown by `gpm list-remote`. See
    SOURCES.txt for exact source provenance.
 
@@ -62,8 +62,9 @@ For the GPL-licensed binaries listed above, this project:
    - Publishes the complete build scripts in this repository
 
 2. LICENSE DISTRIBUTION
-   - Ships the full GPL license texts in the licenses/ directory of every
-     release, together with this COPYING notice
+   - Attaches the full GPL license texts (GPL-2.0.txt, GPL-3.0.txt) to every
+     release, together with this COPYING notice (the same texts are in the
+     repository's licenses/ directory)
    - Records each binary's license in manifest.json
 
 3. NO ADDITIONAL RESTRICTIONS
@@ -83,7 +84,8 @@ NO WARRANTY
 
 This project's code is provided "as is", without warranty of any kind; see
 LICENSE-APACHE and LICENSE-MIT. Third-party binaries come with the warranty
-disclaimers of their own licenses (see licenses/).
+disclaimers of their own licenses (see the license files attached to each
+release).
 
 ================================================================================
 CONTACT
