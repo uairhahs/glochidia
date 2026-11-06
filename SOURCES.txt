@@ -54,6 +54,8 @@ Full license texts are available in the licenses/ directory:
 - GPL-2.0.txt - GNU General Public License version 2
 - GPL-3.0.txt - GNU General Public License version 3 (GNU Make, GNU Awk)
 - LICENSE-MIT, LICENSE-APACHE - Glochidia's own tools (gpm, set_locale)
+- <tool>-LICENSE.txt (in each release) - The license and copyright notices from each
+  third-party tool's own source, collected when it is built
 
 ## Redistribution Rights
 

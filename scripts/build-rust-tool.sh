@@ -16,6 +16,7 @@ if [[ -z ${TOOL_NAME} ]] || [[ -z ${SOURCE_URL} ]]; then
 	exit 1
 fi
 
+START_DIR=$(pwd)
 echo "Building ${TOOL_NAME} with target ${TARGET}..."
 
 # Install target if not musl
@@ -53,6 +54,9 @@ elif [[ ${SOURCE_URL} == *"github.com"* ]]; then
 		git clone --depth 1 "${SOURCE_URL}" "${BUILD_DIR}"
 	fi
 	cd "${BUILD_DIR}"
+
+	# Ship the upstream license with the binary (required by MIT, ISC, BSD and others)
+	bash "${START_DIR}/scripts/collect-license.sh" "${BUILD_DIR}" "${TOOL_NAME}" "${START_DIR}/${TOOL_NAME}.license"
 
 	# Use provided build command or default Rust build
 	if [[ -n ${BUILD_CMD} ]]; then

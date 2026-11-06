@@ -10,6 +10,7 @@ This directory contains modular scripts extracted from the GitHub Actions workfl
 - **`verify-binary.sh`** - Fails if an ELF binary is dynamically linked (pass `allow-dynamic` as the third argument to permit it); scripts pass
 - **`extract-binary-version.sh`** - Extracts version information from compiled binaries
 - **`finalize-version.sh`** - Creates and validates version metadata files
+- **`collect-license.sh`** - Copies a source tree's top-level license files into `<tool>.license` for redistribution; fails if there are none
 - **`build-rust-tool.sh`** - Builds Rust tools with version extraction
 - **`build-c-tool.sh`** - Builds C/C++ tools using grow_glochidium.sh
 

@@ -138,6 +138,9 @@ else
 	echo "Verified: ${PROJECT_DIR} exists (${entry_count} entries)"
 fi
 
+# Machine-readable: build-c-tool.sh reads this to collect the source's license files
+echo "Project directory: ${PROJECT_DIR}"
+
 # 2. Detect build system if not specified
 echo "2. Preparing build environment..."
 if [[ -z ${BUILD_COMMAND} ]]; then
