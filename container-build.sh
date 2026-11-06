@@ -28,7 +28,7 @@ else
 	export TARGET="x86_64-unknown-linux-musl"
 	# Install build dependencies
 	echo "Installing build tools..."
-	apk add --no-cache build-base wget curl git autoconf automake libtool pkgconfig gawk cmake linux-headers
+	apk add --no-cache bash build-base wget curl git autoconf automake libtool pkgconfig gawk cmake linux-headers
 fi
 
 # Run build command (passed from host)
