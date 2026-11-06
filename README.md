@@ -1,16 +1,16 @@
 # Glochidia
 
-**Static Binary Library for ZimaOS** - A curated collection of statically-compiled development tools and utilities for musl-based embedded Linux systems.
+**Static binaries for immutable Linux** - A curated collection of statically-compiled development tools and utilities for ZimaOS servers and other immutable, musl-based x86_64 systems, managed by the `gpm` package manager.
 
 [![License: GPL](https://img.shields.io/badge/License-GPL-blue.svg)](COPYING)
 [![Build Status](https://img.shields.io/badge/build-automated-brightgreen.svg)](https://github.com/uairhahs/glochidia/actions)
 
 ## What is Glochidia?
 
-Glochidia provides instantly-usable static binaries of essential development tools (Make, Git, Nano, etc.) for ZimaOS and similar systems where traditional package managers are unavailable or restricted. Instead of running heavy Docker containers or dealing with complex dependencies, users get:
+Glochidia provides instantly-usable static binaries of development tools (GNU Make, Gawk, fastfetch, starship, etc.) for ZimaOS and similar immutable systems where traditional package managers are unavailable or restricted. Instead of running heavy Docker containers or dealing with complex dependencies, users get:
 
 ✓ **Instant execution** - No installation, just download and run  
-✓ **Zero dependencies** - Statically linked with musl libc  
+✓ **Zero dependencies** - Statically linked with musl libc (except msedit, which is linked against glibc for ZimaOS compatibility)  
 ✓ **Tiny size** - Individual binaries (2-15MB each)  
 ✓ **Seamless integration** - Works alongside system tools  
 ✓ **Auto-updates** - Managed via the `gpm` package manager
@@ -21,22 +21,51 @@ A glochidium is a larval stage of freshwater mussels that attaches to a host tem
 
 ## Quick Start
 
-### For End Users (ZimaOS)
+### For End Users (ZimaOS and other immutable systems)
 
-Install the ZimaOS Terminal app (includes `gpm`):
-
-```bash
-zpkg install zimaos_terminal
-```
-
-Then install tools on-demand:
+`gpm` is a single static binary, so it runs directly on ZimaOS's immutable system without
+`zpkg` or any install step. The same binary works on other immutable, musl-based x86_64
+distributions.
 
 ```bash
-gpm install make    # GNU Make
-gpm install git     # Git VCS
-gpm install nano    # Text editor
-gpm list-remote     # See all available tools
+# Put gpm in the directory it manages, so `gpm upgrade` can keep gpm itself up to date
+mkdir -p /DATA/AppData/glochidia/bin
+curl -fL -o /DATA/AppData/glochidia/bin/gpm \
+  https://github.com/uairhahs/glochidia/releases/download/latest/gpm
+chmod +x /DATA/AppData/glochidia/bin/gpm
+
+# Add that directory to PATH (edits ~/.bashrc and/or ~/.zshrc), then reload your shell
+/DATA/AppData/glochidia/bin/gpm setup-path
+source ~/.bashrc
 ```
+
+(`wget -O <file> <url>` works in place of `curl -fL -o <file> <url>`.)
+
+Then install tools on demand:
+
+```bash
+gpm list-remote          # See all available tools
+gpm install make gawk    # Install one or more tools
+gpm upgrade              # Upgrade everything installed, gpm included
+gpm remove gawk          # Remove a tool
+```
+
+Every binary's sha256 is listed in `manifest.json` in the same release, and `gpm` verifies
+it on every download. To check the gpm binary you downloaded by hand:
+
+```bash
+curl -fsL https://github.com/uairhahs/glochidia/releases/download/latest/manifest.json \
+  | grep -A5 '"gpm": {' | grep sha256
+sha256sum /DATA/AppData/glochidia/bin/gpm
+```
+
+**Other systems:** gpm stores tools in `/DATA/AppData/glochidia/bin` and its cache in
+`/DATA/AppData/glochidia/.cache` by default. On a system without a writable `/DATA`, pass
+`--install-dir` and `--cache-dir` to every gpm command.
+
+**ZimaOS packages:** gpm is not available through `zpkg` or ZimaOS's Mod-Store today. Each
+release also publishes `gpm.raw`, a ZimaOS system extension built from the same binary, as
+groundwork for a future Mod-Store listing.
 
 ### For Developers
 
@@ -49,10 +78,8 @@ export DEPLOY_USER=username
 export DEPLOY_HOST=device.ip
 export DEPLOY_PATH=/path/on/device
 
-# Build a tool
-REPO_URL=https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz \
-BINARY_NAME=make \
-./grow_glochidium.sh
+# Build a tool: grow_glochidium.sh <repo_or_tarball_url> <binary_name> [build_command]
+./grow_glochidium.sh https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz make
 ```
 
 ## Architecture
@@ -67,22 +94,23 @@ This project consists of three components:
 
 ### For End Users
 
-- ZimaOS or compatible musl-based Linux system
-- `/DATA` directory with write permissions (standard on ZimaOS)
-- Internet connection for downloading binaries
+- x86_64 ZimaOS, or another immutable, musl-based x86_64 Linux system
+- `/DATA` directory with write permissions (standard on ZimaOS), or use `--install-dir` and `--cache-dir`
+- `curl` or `wget` for the first gpm download, and an internet connection
 
 ### For Developers (Building from Source)
 
 **Required:**
 
-- **podman** or **docker** - For containerized builds
-- **git** - For repository operations
+- **podman** (default) or **docker** (set `CONTAINER_RUNTIME=docker`) - For containerized builds
+- **git** - For cloning git sources
+- **wget** - For downloading tarball sources
+- **file** - For identifying the built artifact
 - **bash** 4.0+ - For build scripts
-- **GitHub CLI** (`gh`) or **curl** - For release uploads
 
-**Optional:**
+**For SSH deployment:**
 
-- **jq** - For JSON manipulation in manifest generation
+- **ssh** with key-based authentication to the target, and **rsync**
 
 ### Deployment Methods
 
@@ -112,29 +140,34 @@ The build system supports multiple deployment targets:
 
 ### Build Environments
 
-The system uses Alpine Linux (musl) for all projects:
+Builds run in pinned container images (override with `ALPINE_IMAGE`, `RUST_ALPINE_IMAGE` and `RUST_GNU_IMAGE`):
 
-- **Alpine Linux** (musl) - Static compilation for C/C++ projects
-- **rust:alpine** - Static compilation for Rust projects
+- **alpine:3.24** (musl) - Static compilation for C/C++ projects
+- **rust:1.99-alpine3.24** (musl) - Static compilation for Rust projects (used when the build command runs `cargo`)
+- **rust:1.99-slim-bookworm** (glibc) - Only for msedit, which needs glibc on ZimaOS
 
 ## Building From Source
 
 ### Basic Usage
 
 ```bash
-./grow_glochidium.sh
+./grow_glochidium.sh <repo_or_tarball_url> <binary_name> [build_command]
 ```
 
-The script accepts environment variables for configuration:
+The source URL can be a git repository or a `.tar.gz`, `.tar.xz`, `.tar.bz2` or `.tgz`
+tarball. Without a build command, the build system is auto-detected (see below).
 
-| Variable        | Description                   | Default    | Required           |
-| --------------- | ----------------------------- | ---------- | ------------------ |
-| `REPO_URL`      | Source code URL (git/tarball) | (prompted) | Yes                |
-| `BINARY_NAME`   | Output binary filename        | (prompted) | Yes                |
-| `DEPLOY_METHOD` | Deployment target             | `ssh`      | No                 |
-| `DEPLOY_USER`   | SSH username                  | -          | For SSH deployment |
-| `DEPLOY_HOST`   | SSH hostname/IP               | -          | For SSH deployment |
-| `DEPLOY_PATH`   | Deployment path on host       | -          | For SSH deployment |
+Environment variables:
+
+| Variable            | Description                                            | Default              |
+| ------------------- | ------------------------------------------------------ | -------------------- |
+| `DEPLOY_METHOD`     | `ssh`, `ci-cd` or `none`                               | `ssh`                |
+| `DEPLOY_USER`       | SSH username                                           | prompted (SSH only)  |
+| `DEPLOY_HOST`       | SSH hostname/IP                                        | prompted (SSH only)  |
+| `DEPLOY_PATH`       | Deployment path on the host                            | prompted (SSH only)  |
+| `CONTAINER_RUNTIME` | Container runtime to use                               | `podman`             |
+| `GIT_REF`           | Branch, tag or commit to build (git sources)           | default branch       |
+| `SOURCE_SHA256`     | Expected tarball sha256; the build aborts on mismatch  | not checked          |
 
 ### Examples
 
@@ -167,11 +200,11 @@ The script accepts environment variables for configuration:
 
 ### Custom Build Commands
 
-For projects with non-standard build systems:
+For projects with non-standard build systems, pass the build command as the third argument:
 
 ```bash
-CUSTOM_BUILD_COMMAND="mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release .. && make" \
-./grow_glochidium.sh
+./grow_glochidium.sh https://github.com/example/tool tool \
+  "mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release .. && make"
 ```
 
 ## How It Works
@@ -179,22 +212,23 @@ CUSTOM_BUILD_COMMAND="mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Rel
 ### Build Pipeline
 
 1. **Download Source** - Clones git repo or extracts tarball
-2. **Container Selection** - Alpine (C/C++) or rust:alpine (Rust)
+2. **Container Selection** - Alpine (C/C++) or the Rust Alpine image (build commands that run `cargo`)
 3. **Compatibility Fixes** - Sets musl-compatible flags (CFLAGS, LDFLAGS)
 4. **Compilation** - Builds statically with `-static` LDFLAGS
 5. **Artifact Extraction** - Copies binary from container
-6. **Verification** - Confirms static ELF linking
+6. **Verification** - Reports the artifact type (CI additionally fails any dynamically linked ELF binary, see `scripts/verify-binary.sh`)
 7. **Deployment** - SSH deployment or artifact preservation for CI/CD
 
 ### Auto-Detection
 
-The script automatically detects:
+Without a build command, the script checks for these files in order:
 
-- **Makefile** → `./configure && make LDFLAGS="-static"`
-- **CMakeLists.txt** → `cmake -DCMAKE_EXE_LINKER_FLAGS="-static" && make`
-- **build.sh** → Executes custom script
+- **Makefile** → `make -j$(nproc)`
+- **build.sh** → `bash build.sh`
+- **CMakeLists.txt** → `mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF .. && make -j$(nproc)`
 
-Note: Rust projects automatically use the rust:alpine container.
+Static linking comes from the `LDFLAGS`/`CFLAGS` set in the container. Rust projects are not
+auto-detected: pass a `cargo build` command, which also selects the Rust container.
 
 ### Distribution
 
@@ -214,8 +248,12 @@ Build scripts and infrastructure are licensed under GPL-3.0-or-later. See [COPYI
 Each binary is distributed under its original license:
 
 - **GNU Make** - GPL-3.0-or-later
-- **Git** - GPL-2.0-only
-- **GNU Nano** - GPL-3.0-or-later
+- **GNU Awk** - GPL-3.0-or-later
+- **fastfetch** - MIT
+- **ble.sh** - BSD-3-Clause
+- **starship** - ISC
+- **msedit** - MIT
+- **gpm** and **set_locale** (this repository) - GPL-2.0-or-later
 
 ### GPL Compliance
 
@@ -265,55 +303,35 @@ Then add the tool to the GitHub Actions workflow matrix.
 
 **Note**: Glochidia is independent of ZimaOS and is not officially affiliated with IceWhale Technology.
 
-```bash
-grow_glochidium.sh https://github.com/fastfetch-cli/fastfetch fastfetch
-Enter DEPLOY_USER: <your_remote_user>
-Enter DEPLOY_HOST: <ssh_target>
-Enter DEPLOY_PATH: <destination_path>
-```
-
-With environment variables (no prompts):
-
-```bash
-  grow_glochidium.sh https://github.com/fastfetch-cli/fastfetch fastfetch
-```
-
-With environment variables (no prompts):
-
-```bash
-DEPLOY_METHOD=ci-cd ./grow_glochidium.sh \
-  https://github.com/fastfetch-cli/fastfetch \
-  fastfetch
-```
-
-With SSH deployment:
-
-```bash
-DEPLOY_USER=user DEPLOY_HOST=192.168.1.100 DEPLOY_PATH=/DATA/bin \
-./grow_glochidium.sh \
-  https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz \
-  make
-```
-
 ## Project Structure
 
 ```txt
 glochidia/
+├── .github/workflows/
+│   └── build-release.yml          # Builds every tool and publishes the release
+├── gpm/                           # gpm package manager (Rust)
+├── glochidia-locale/              # set_locale and locale-gen utilities (Rust)
+├── zpkg/
+│   ├── build-zpkg.sh              # Packages gpm as gpm.raw (ZimaOS system extension)
+│   ├── raw/                       # gpm.raw filesystem tree (binary added at build time)
+│   └── zpkg.md                    # ZimaOS RAW package format notes
 ├── scripts/
 │   ├── build-rust-tool.sh         # Rust build automation
 │   ├── build-c-tool.sh            # C/C++ build automation
 │   ├── fetch-version.sh           # Version fetching logic
-│   ├── verify-binary.sh           # Binary verification
+│   ├── verify-binary.sh           # Static linking check
 │   ├── extract-binary-version.sh  # Version extraction
 │   ├── finalize-version.sh        # Version metadata handling
 │   ├── generate-manifest.py       # Manifest generation
 │   ├── generate-release-body.py   # Release notes generation
 │   ├── tools-metadata.json        # Tool metadata configuration
 │   └── README.md                  # Scripts documentation
+├── licenses/                      # Full license texts
 ├── grow_glochidium.sh             # Universal native build & deploy script
-├── alpine-build.sh                # Container-side build executor
+├── container-build.sh             # Container-side build executor
 ├── Examples.md                    # Build examples for various projects
-├── .gitignore                     # Git ignore rules
+├── SOURCES.txt                    # Source provenance for distributed binaries
+├── COPYING                        # License notice
 └── README.md                      # This file
 ```
 
@@ -323,7 +341,7 @@ glochidia/
 
 All builds run natively in Alpine Linux containers:
 
-- **Base Image:** alpine:latest (3.20 or later)
+- **Base Image:** alpine:3.24 (pinned; bump deliberately)
 - **Libc:** musl (native compilation, not cross-compiled)
 - **Linking:** Static by default (musl + static libraries)
 - **Toolchain:** Native gcc, make, autotools, cargo, cmake on x86_64
@@ -377,23 +395,23 @@ This approach:
 
 ### Supported Build Systems
 
-Auto-detection supports:
+Supported build systems:
 
 - **Makefile** - Standard GNU Make projects (gawk, GNU Make, etc.)
 - **build.sh** - Custom shell build scripts
 - **CMakeLists.txt** - CMake-based projects (fastfetch, etc.)
-- **Cargo.toml** - Rust projects (starship, msedit, etc.)
+- **Cargo.toml** - Rust projects (starship, msedit, etc.), with an explicit `cargo build` command
 
-For unsupported systems, provide a custom build command as the 3rd parameter.
+For other build systems, provide a custom build command as the 3rd parameter.
 
 ### Known Compatibility Fixes
 
 The build containers handle most projects automatically:
 
-- **Rust projects** - Uses rust:alpine container with native musl toolchain
+- **Rust projects** - Uses the pinned Rust Alpine container with native musl toolchain
 - **CMake projects** - Includes `-DBUILD_SHARED_LIBS=OFF` to disable shared libraries
 - **C/Autoconf projects** - Sets `LDFLAGS="-static" CFLAGS="-static -std=gnu11"` to enforce static linking
-- **GCC 15 compatibility** - Forces gnu11 standard to avoid C23 function prototype issuese static linking
+- **GCC 15 compatibility** - Forces gnu11 standard to avoid C23 function prototype issues
 - **Linux headers** - Includes linux-headers for projects requiring kernel interface headers
 - **Musl compatibility** - Handles musl-specific issues automatically
 
@@ -403,7 +421,8 @@ To verify a compiled binary is statically linked:
 
 ```bash
 file <binary_name>
-# Output: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statically linked
+# Output: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), static-pie linked
+# (or "statically linked"; anything mentioning an "interpreter" is dynamic)
 
 ldd <binary_name>
 # Output: not a dynamic executable
@@ -415,7 +434,7 @@ ldd <binary_name>
 
 - Ensure podman is installed: `podman --version`
 - Alpine image will be pulled automatically on first run
-- Manual pull: `podman pull alpine:latest`
+- Manual pull: `podman pull alpine:3.24`
 
 ### Build fails during compilation
 
@@ -427,7 +446,7 @@ ldd <binary_name>
 
 - **Cause:** Binary has dynamic library dependencies that don't exist on the target system
 - **Solution:** Ensure binaries are statically linked
-  - Verify on build host: `file <binary_name>` should show "statically linked"
+  - Verify on build host: `file <binary_name>` should show "statically linked" or "static-pie linked"
   - Check with: `ldd <binary_name>` should output "not a dynamic executable"
 - **For Cargo projects:** Verify the target system matches or use `x86_64-unknown-linux-musl` target
 - **For CMake projects:** Ensure `-DBUILD_SHARED_LIBS=OFF` is used (default in auto-detection)
@@ -444,10 +463,9 @@ ldd <binary_name>
 
 Changes should:
 
-1. Maintain C99 compatibility
-2. Compile cleanly with `-Wall -Werror`
-3. Work when statically linked with musl
-4. Be tested with: `DEPLOY_USER=user DEPLOY_HOST=ip DEPLOY_PATH=/DATA/bin grow_glochidium.sh <repo> <binary>` (optionally set `GIT_REF` to build a specific tag or commit, and `SOURCE_SHA256` to verify a tarball)
+1. Work when statically linked with musl
+2. Pass `cargo test` for changes to `gpm/` or `glochidia-locale/`
+3. Be tested with: `DEPLOY_USER=user DEPLOY_HOST=ip DEPLOY_PATH=/DATA/bin grow_glochidium.sh <repo> <binary>` (optionally set `GIT_REF` to build a specific tag or commit, and `SOURCE_SHA256` to verify a tarball)
 
 ## License
 
@@ -457,6 +475,5 @@ See the COPYING file for the full license text.
 
 ---
 
-**Last Updated:** 16 Dec 2025  
 **Deployment Status:** Production Ready
 **Build Systems Tested:** GNU Autoconf, Rust/Cargo, CMake, Custom Make
