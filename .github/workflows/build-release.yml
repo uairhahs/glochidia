@@ -313,7 +313,7 @@ jobs:
             description: "GNU Awk text processing"
             license: "GPL-3.0-or-later"
             source_url: "https://ftp.gnu.org/gnu/gawk/gawk-5.3.2.tar.xz"
-            source_sha256: "3203e52edb182061ac4fe37f0040e8d5b5ed5d37e1c8a1dcf5d8288d0c757cd5"
+            source_sha256: "f8c3486509de705192138b00ef2c00bbbdd0e84c30d5c07d23fc73a9dc4cc9cc"
             build_cmd: "./configure LDFLAGS=-static && make -j$(nproc)"
             version: ""
             git_ref: ""
