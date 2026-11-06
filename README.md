@@ -2,7 +2,7 @@
 
 **Static binaries for immutable Linux** - A curated collection of statically-compiled development tools and utilities for ZimaOS servers and other immutable, musl-based x86_64 systems, managed by the `gpm` package manager.
 
-[![License: GPL](https://img.shields.io/badge/License-GPL-blue.svg)](COPYING)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue.svg)](COPYING)
 [![Build Status](https://img.shields.io/badge/build-automated-brightgreen.svg)](https://github.com/uairhahs/glochidia/actions)
 
 ## What is Glochidia?
@@ -241,11 +241,14 @@ Built binaries are published to:
 
 ### This Repository
 
-Build scripts and infrastructure are licensed under GPL-3.0-or-later. See [COPYING](COPYING) for details.
+Glochidia's own code (gpm, set_locale, the build scripts and CI tooling) is dual-licensed
+under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option. See
+[COPYING](COPYING) for details.
 
 ### Distributed Binaries
 
-Each binary is distributed under its original license:
+Each third-party binary keeps its original license (distributing them alongside this
+project's code is mere aggregation):
 
 - **GNU Make** - GPL-3.0-or-later
 - **GNU Awk** - GPL-3.0-or-later
@@ -253,11 +256,11 @@ Each binary is distributed under its original license:
 - **ble.sh** - BSD-3-Clause
 - **starship** - ISC
 - **msedit** - MIT
-- **gpm** and **set_locale** (this repository) - GPL-2.0-or-later
+- **gpm** and **set_locale** (this repository) - MIT OR Apache-2.0
 
 ### GPL Compliance
 
-This project complies with GPL requirements by:
+For the GPL-licensed binaries, this project complies with GPL requirements by:
 
 ✓ **Source Availability** - All source URLs documented in [SOURCES.txt](SOURCES.txt)  
 ✓ **License Distribution** - Full texts in [licenses/](licenses/) directory  
@@ -469,9 +472,17 @@ Changes should:
 
 ## License
 
-This project is licensed under the GNU General Public License v2.0 (GPLv2).
+Licensed under either of
 
-See the COPYING file for the full license text.
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
+- MIT License ([LICENSE-MIT](LICENSE-MIT))
+
+at your option. Third-party binaries distributed by this project keep their own licenses;
+see [COPYING](COPYING).
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion
+in this project, as defined in the Apache-2.0 license, shall be dual-licensed as above,
+without any additional terms or conditions.
 
 ---
 

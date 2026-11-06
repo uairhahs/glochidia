@@ -1,7 +1,7 @@
 {
   "gpm": {
     "description": "Glochidia Package Manager",
-    "license": "GPL-2.0-or-later",
+    "license": "MIT OR Apache-2.0",
     "source_url": "https://github.com/{repo}",
     "build_type": "rust-alpine"
   },
@@ -45,7 +45,7 @@
   },
   "set_locale": {
     "description": "Locale setting utility",
-    "license": "GPL-2.0-or-later",
+    "license": "MIT OR Apache-2.0",
     "source_url": "https://github.com/{repo}",
     "build_type": "rust-alpine"
   }

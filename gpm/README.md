@@ -120,4 +120,4 @@ RUST_LOG=debug cargo run -- install make
 
 ## License
 
-GPL-2.0-or-later
+Licensed under either of [MIT](../LICENSE-MIT) or [Apache-2.0](../LICENSE-APACHE), at your option.

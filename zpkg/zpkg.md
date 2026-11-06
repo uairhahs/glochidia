@@ -1,3 +1,7 @@
+> Reference notes on the ZimaOS RAW package format, based on IceWhale Technology's
+> documentation. Example names such as `zimaos_terminal` come from that documentation and are
+> not part of gpm. This file is not covered by this repository's MIT OR Apache-2.0 license.
+
 Note regarding consistent naming: In the examples below, the text zimaos_terminal (and zimaos-terminal) represents the specific package name/ID. Wherever this name appears, the content must be identical (consistent) across your directory names, configuration files, and systemd service names for the package to function correctly.
 
 Creating a RAW Package Program
