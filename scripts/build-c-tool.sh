@@ -22,9 +22,15 @@ export DEPLOY_PATH=/tmp/ci
 
 echo "Building ${TOOL_NAME} using grow_glochidium.sh..."
 
-# Run the build script and capture output to extract BUILD_DIR
-OUTPUT=$(bash grow_glochidium.sh "${SOURCE_URL}" "${TOOL_NAME}" "${BUILD_CMD}" 2>&1)
-echo "${OUTPUT}"
+# Run the build script, streaming output to the log while keeping a copy to extract BUILD_DIR.
+# (Capturing with $(...) under set -e would exit on failure before the output was printed.)
+LOG_FILE=$(mktemp)
+trap 'rm -f "${LOG_FILE}"' EXIT
+if ! bash grow_glochidium.sh "${SOURCE_URL}" "${TOOL_NAME}" "${BUILD_CMD}" 2>&1 | tee "${LOG_FILE}"; then
+	echo "Error: grow_glochidium.sh failed for ${TOOL_NAME}"
+	exit 1
+fi
+OUTPUT=$(cat "${LOG_FILE}")
 
 # Extract the actual BUILD_DIR from the script output
 BUILD_DIR=$(echo "${OUTPUT}" | grep "Build directory preserved:" | sed 's/.*Build directory preserved: //')
