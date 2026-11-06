@@ -31,3 +31,8 @@ build/
 
 # Local testing files
 .local
+# Built by CI, never committed: the gpm binary and its ZimaOS package
+/gpm.raw
+/gpm/gpm
+/gpm/gpm-bin
+/zpkg/raw/usr/bin/

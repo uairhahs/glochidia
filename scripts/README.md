@@ -7,7 +7,7 @@ This directory contains modular scripts extracted from the GitHub Actions workfl
 ### Shell Scripts
 
 - **`fetch-version.sh`** - Fetches version information from GitHub releases or uses configured fallbacks
-- **`verify-binary.sh`** - Verifies that binaries are statically linked
+- **`verify-binary.sh`** - Fails if an ELF binary is dynamically linked (pass `allow-dynamic` as the third argument to permit it); scripts pass
 - **`extract-binary-version.sh`** - Extracts version information from compiled binaries
 - **`finalize-version.sh`** - Creates and validates version metadata files
 - **`build-rust-tool.sh`** - Builds Rust tools with version extraction
@@ -51,6 +51,7 @@ This directory contains modular scripts extracted from the GitHub Actions workfl
 
 ```bash
 ./scripts/verify-binary.sh "./make-bin" "make"
+./scripts/verify-binary.sh "./msedit-bin" "msedit" allow-dynamic
 ```
 
 ### Version Extraction

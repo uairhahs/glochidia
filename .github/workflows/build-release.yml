@@ -57,8 +57,19 @@ jobs:
             repo_url: ""
             build_cmd: ""
 
+    env:
+      TOOL_NAME: ${{ matrix.tool.name }}
+      SOURCE_URL: ${{ matrix.tool.source_url }}
+      REPO_URL: ${{ matrix.tool.repo_url }}
+      TOOL_VERSION: ${{ matrix.tool.version }}
+      GIT_REF: ${{ matrix.tool.git_ref }}
+      WORKING_DIR: ${{ matrix.tool.working_dir }}
+      BUILD_CMD: ${{ matrix.tool.build_cmd }}
+      BINARY_NAME: ${{ matrix.tool.binary_name }}
+
+    # Pinned toolchain image; bump deliberately (keep in sync with grow_glochidium.sh)
     container:
-      image: rust:alpine
+      image: rust:1.99-alpine3.24
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -71,12 +82,6 @@ jobs:
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TOOL_NAME: ${{ matrix.tool.name }}
-          SOURCE_URL: ${{ matrix.tool.source_url }}
-          REPO_URL: ${{ matrix.tool.repo_url }}
-          TOOL_VERSION: ${{ matrix.tool.version }}
-          GIT_REF: ${{ matrix.tool.git_ref }}
-          WORKING_DIR: ${{ matrix.tool.working_dir }}
         run: |
           if [ -n "${WORKING_DIR}" ]; then
             # In-repo crate: version from Cargo.toml, cache keyed on the source contents
@@ -123,31 +128,43 @@ jobs:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
 
+      - name: Run tests
+        if: steps.cache-binary.outputs.cache-hit != 'true' && matrix.tool.working_dir != ''
+        shell: bash
+        run: cd "${WORKING_DIR}" && cargo test --locked --target x86_64-unknown-linux-musl
+
       - name: Build ${{ matrix.tool.name }}
         if: steps.cache-binary.outputs.cache-hit != 'true'
+        shell: bash
+        env:
+          FETCHED_VERSION: ${{ steps.fetch-version.outputs.version }}
         run: |
           bash scripts/build-rust-tool.sh \
-            "${{ matrix.tool.name }}" \
-            "${{ matrix.tool.source_url }}" \
-            "${{ matrix.tool.working_dir }}" \
-            "${{ matrix.tool.build_cmd }}" \
-            "${{ matrix.tool.binary_name }}" \
-            "${{ steps.fetch-version.outputs.version }}" \
-            "${{ env.REPO_VERSION }}" \
+            "${TOOL_NAME}" \
+            "${SOURCE_URL}" \
+            "${WORKING_DIR}" \
+            "${BUILD_CMD}" \
+            "${BINARY_NAME}" \
+            "${FETCHED_VERSION}" \
+            "${REPO_VERSION}" \
             "x86_64-unknown-linux-musl"
 
       - name: Verify static binary
         if: steps.cache-binary.outputs.cache-hit != 'true'
-        run: sh scripts/verify-binary.sh "${{ matrix.tool.name }}-bin" "${{ matrix.tool.name }}"
+        shell: bash
+        run: bash scripts/verify-binary.sh "${TOOL_NAME}-bin" "${TOOL_NAME}"
 
       - name: Finalize version metadata
+        shell: bash
+        env:
+          FETCHED_VERSION: ${{ steps.fetch-version.outputs.version }}
         run: |
-          sh scripts/finalize-version.sh \
-            "${{ matrix.tool.name }}" \
-            "${{ matrix.tool.version }}" \
-            "${{ steps.fetch-version.outputs.version }}" \
-            "${{ env.REPO_VERSION }}" \
-            "${{ matrix.tool.working_dir }}"
+          bash scripts/finalize-version.sh \
+            "${TOOL_NAME}" \
+            "${TOOL_VERSION}" \
+            "${FETCHED_VERSION}" \
+            "${REPO_VERSION}" \
+            "${WORKING_DIR}"
 
       - name: Upload artifact with metadata
         uses: actions/upload-artifact@v4
@@ -176,8 +193,20 @@ jobs:
             working_dir: ""
             target: "x86_64-unknown-linux-gnu"
 
+    env:
+      TOOL_NAME: ${{ matrix.tool.name }}
+      SOURCE_URL: ${{ matrix.tool.source_url }}
+      REPO_URL: ${{ matrix.tool.repo_url }}
+      TOOL_VERSION: ${{ matrix.tool.version }}
+      GIT_REF: ${{ matrix.tool.git_ref }}
+      WORKING_DIR: ${{ matrix.tool.working_dir }}
+      BUILD_CMD: ${{ matrix.tool.build_cmd }}
+      BINARY_NAME: ${{ matrix.tool.binary_name }}
+      TARGET: ${{ matrix.tool.target }}
+
+    # Pinned toolchain image; bump deliberately (keep in sync with grow_glochidium.sh)
     container:
-      image: rust:slim-bookworm
+      image: rust:1.99-slim-bookworm
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -193,11 +222,6 @@ jobs:
         shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TOOL_NAME: ${{ matrix.tool.name }}
-          SOURCE_URL: ${{ matrix.tool.source_url }}
-          REPO_URL: ${{ matrix.tool.repo_url }}
-          TOOL_VERSION: ${{ matrix.tool.version }}
-          GIT_REF: ${{ matrix.tool.git_ref }}
         run: |
           VERSION=$(scripts/fetch-version.sh "${TOOL_NAME}" "${SOURCE_URL}" "${REPO_URL}" "${TOOL_VERSION}" "${GIT_REF}")
           echo "version=${VERSION:-unknown}" >> "$GITHUB_OUTPUT"
@@ -231,31 +255,36 @@ jobs:
       - name: Build ${{ matrix.tool.name }}
         if: steps.cache-binary.outputs.cache-hit != 'true'
         shell: bash
+        env:
+          FETCHED_VERSION: ${{ steps.fetch-version.outputs.version }}
         run: |
           scripts/build-rust-tool.sh \
-            "${{ matrix.tool.name }}" \
-            "${{ matrix.tool.source_url }}" \
-            "${{ matrix.tool.working_dir }}" \
-            "${{ matrix.tool.build_cmd }}" \
-            "${{ matrix.tool.binary_name }}" \
-            "${{ steps.fetch-version.outputs.version }}" \
-            "${{ env.REPO_VERSION }}" \
-            "${{ matrix.tool.target }}"
+            "${TOOL_NAME}" \
+            "${SOURCE_URL}" \
+            "${WORKING_DIR}" \
+            "${BUILD_CMD}" \
+            "${BINARY_NAME}" \
+            "${FETCHED_VERSION}" \
+            "${REPO_VERSION}" \
+            "${TARGET}"
 
-      - name: Verify static binary
+      # glibc-linked on purpose for ZimaOS compatibility, so dynamic linking is allowed
+      - name: Verify binary linkage
         if: steps.cache-binary.outputs.cache-hit != 'true'
         shell: bash
-        run: scripts/verify-binary.sh "${{ matrix.tool.name }}-bin" "${{ matrix.tool.name }}"
+        run: scripts/verify-binary.sh "${TOOL_NAME}-bin" "${TOOL_NAME}" allow-dynamic
 
       - name: Finalize version metadata
         shell: bash
+        env:
+          FETCHED_VERSION: ${{ steps.fetch-version.outputs.version }}
         run: |
           scripts/finalize-version.sh \
-            "${{ matrix.tool.name }}" \
-            "${{ matrix.tool.version }}" \
-            "${{ steps.fetch-version.outputs.version }}" \
-            "${{ env.REPO_VERSION }}" \
-            "${{ matrix.tool.working_dir }}"
+            "${TOOL_NAME}" \
+            "${TOOL_VERSION}" \
+            "${FETCHED_VERSION}" \
+            "${REPO_VERSION}" \
+            "${WORKING_DIR}"
 
       - name: Upload artifact with metadata
         uses: actions/upload-artifact@v4
@@ -294,7 +323,8 @@ jobs:
             source_url: "https://github.com/akinomyoga/ble.sh"
             build_cmd: "make"
             version: ""
-            git_ref: ""
+            # ble.sh publishes development builds from master; pin a known-good commit
+            git_ref: "152942758f567e51fd17bdc7b3783d27b3c476aa"
             source_sha256: ""
           - name: fastfetch
             description: "System information tool"
@@ -304,22 +334,25 @@ jobs:
             version: ""
             git_ref: ""
             source_sha256: ""
+    env:
+      TOOL_NAME: ${{ matrix.tool.name }}
+      SOURCE_URL: ${{ matrix.tool.source_url }}
+      SOURCE_SHA256: ${{ matrix.tool.source_sha256 }}
+      TOOL_VERSION: ${{ matrix.tool.version }}
+      GIT_REF: ${{ matrix.tool.git_ref }}
+      BUILD_CMD: ${{ matrix.tool.build_cmd }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Git sources build this resolved version: git_ref if pinned, else the latest release tag
       - name: Fetch latest release version
         id: fetch-version
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION=$(bash scripts/fetch-version.sh \
-            "${{ matrix.tool.name }}" \
-            "${{ matrix.tool.source_url }}" \
-            "" \
-            "${{ matrix.tool.version }}" \
-            "${{ matrix.tool.git_ref }}")
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          VERSION=$(bash scripts/fetch-version.sh "${TOOL_NAME}" "${SOURCE_URL}" "" "${TOOL_VERSION}" "${GIT_REF}")
+          echo "version=${VERSION:-unknown}" >> "$GITHUB_OUTPUT"
 
       - name: Install podman
         run: |
@@ -327,24 +360,28 @@ jobs:
           sudo apt-get install -y podman
 
       - name: Build ${{ matrix.tool.name }}
+        env:
+          FETCHED_VERSION: ${{ steps.fetch-version.outputs.version }}
         run: |
           bash scripts/build-c-tool.sh \
-            "${{ matrix.tool.name }}" \
-            "${{ matrix.tool.source_url }}" \
-            "${{ matrix.tool.build_cmd }}" \
-            "${{ matrix.tool.version }}" \
-            "${{ steps.fetch-version.outputs.version }}"
+            "${TOOL_NAME}" \
+            "${SOURCE_URL}" \
+            "${BUILD_CMD}" \
+            "${TOOL_VERSION}" \
+            "${FETCHED_VERSION}"
 
       - name: Verify static binary
-        run: bash scripts/verify-binary.sh "${{ matrix.tool.name }}-bin" "${{ matrix.tool.name }}"
+        run: bash scripts/verify-binary.sh "${TOOL_NAME}-bin" "${TOOL_NAME}"
 
       - name: Finalize version metadata
+        env:
+          FETCHED_VERSION: ${{ steps.fetch-version.outputs.version }}
         run: |
           bash scripts/finalize-version.sh \
-            "${{ matrix.tool.name }}" \
-            "${{ matrix.tool.version }}" \
-            "${{ steps.fetch-version.outputs.version }}" \
-            "${{ env.REPO_VERSION }}" \
+            "${TOOL_NAME}" \
+            "${TOOL_VERSION}" \
+            "${FETCHED_VERSION}" \
+            "${REPO_VERSION}" \
             ""
 
       - name: Upload artifact
@@ -409,11 +446,11 @@ jobs:
             curl -sS https://www.gnu.org/licenses/gpl-3.0.txt -o licenses/GPL-3.0.txt
           fi
 
+      # Packages the gpm binary built by this workflow (not a committed copy)
       - name: Build ZimaOS RAW package
         run: |
           sudo apt-get update && sudo apt-get install -y squashfs-tools
-          bash zpkg/build-zpkg.sh
-          cp gpm.raw release-files/
+          bash zpkg/build-zpkg.sh release-files/gpm release-files/gpm.raw
           echo "Added gpm.raw to release files"
 
       - name: Copy compliance files
@@ -422,12 +459,31 @@ jobs:
           cp COPYING release-files/
           cp -r licenses release-files/
 
-      - name: Generate manifest with Python
+      # Decided before the manifest is generated so its download URLs point at the
+      # release actually being created (a v* tag push publishes under that tag)
+      - name: Determine release version
+        id: release-version
+        env:
+          INPUT_RELEASE_TAG: ${{ github.event.inputs.release_tag }}
         run: |
-          python3 scripts/generate-manifest.py \
-            "${{ github.repository }}" \
-            "${{ github.event.inputs.release_tag || 'latest' }}" \
-            "${{ env.REPO_VERSION }}"
+          if [ -n "${INPUT_RELEASE_TAG}" ]; then
+            # Use explicitly provided tag from workflow dispatch
+            VERSION="${INPUT_RELEASE_TAG}"
+          elif [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            # Use tag from push event (e.g., v1.0.0)
+            VERSION="${GITHUB_REF#refs/tags/}"
+          else
+            # Push to master branch always uses "latest"
+            VERSION="latest"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Release version: ${VERSION}"
+
+      - name: Generate manifest with Python
+        env:
+          RELEASE_TAG: ${{ steps.release-version.outputs.version }}
+        run: |
+          python3 scripts/generate-manifest.py "${GITHUB_REPOSITORY}" "${RELEASE_TAG}" "${REPO_VERSION}"
           echo ""
           echo "Final release files:"
           ls -lh release-files/
@@ -436,29 +492,16 @@ jobs:
           grep '"sha256"' release-files/manifest.json
 
       - name: Generate release body
+        env:
+          RELEASE_TAG: ${{ steps.release-version.outputs.version }}
         run: |
-          REPO="${{ github.repository }}"
-          RELEASE_TAG="${{ github.event.inputs.release_tag || 'latest' }}"
-          BUILD_INFO="${{ github.event_name == 'workflow_dispatch' && 'manually' || 'from tag push' }}"
-          COMMIT="${{ github.sha }}"
-          python3 scripts/generate-release-body.py "$REPO" "$RELEASE_TAG" "$BUILD_INFO" "$COMMIT"
+          case "${GITHUB_EVENT_NAME}:${GITHUB_REF}" in
+            workflow_dispatch:*) BUILD_INFO="manually" ;;
+            push:refs/tags/*) BUILD_INFO="from tag push" ;;
+            *) BUILD_INFO="from push to ${GITHUB_REF_NAME}" ;;
+          esac
+          python3 scripts/generate-release-body.py "${GITHUB_REPOSITORY}" "${RELEASE_TAG}" "${BUILD_INFO}" "${GITHUB_SHA}"
           cat release-body.md
-
-      - name: Determine release version
-        id: release-version
-        run: |
-          if [ -n "${{ github.event.inputs.release_tag }}" ]; then
-            # Use explicitly provided tag from workflow dispatch
-            VERSION="${{ github.event.inputs.release_tag }}"
-          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            # Use tag from push event (e.g., v1.0.0)
-            VERSION="${GITHUB_REF#refs/tags/}"
-          else
-            # Push to master branch always uses "latest"
-            VERSION="latest"
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Release version: $VERSION"
 
       - name: Create/Update Release
         uses: softprops/action-gh-release@v2

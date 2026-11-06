@@ -1,6 +1,11 @@
 #!/bin/bash
 # Native Alpine container build and deploy to embedded Linux target
 # Usage: grow_glochidium.sh <repo_url> <binary_name> [build_command]
+#
+# Optional environment:
+#   GIT_REF        Branch, tag or commit to check out after cloning a git source
+#   SOURCE_SHA256  Expected sha256 of a tarball source; the build aborts on mismatch
+#   ALPINE_IMAGE, RUST_ALPINE_IMAGE, RUST_GNU_IMAGE  Override the pinned build images
 
 set -e
 
@@ -12,6 +17,14 @@ BUILD_DIR="/tmp/glochidium_build_$$"
 PROJECT_DIR="${BUILD_DIR}/project"
 TARBALL_FILE=""
 CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-podman}"
+GIT_REF="${GIT_REF-}"
+SOURCE_SHA256="${SOURCE_SHA256-}"
+
+# Pinned build images, so a new upstream release cannot silently change the toolchain.
+# Bump these deliberately.
+ALPINE_IMAGE="${ALPINE_IMAGE:-alpine:3.24}"
+RUST_ALPINE_IMAGE="${RUST_ALPINE_IMAGE:-rust:1.99-alpine3.24}"
+RUST_GNU_IMAGE="${RUST_GNU_IMAGE:-rust:1.99-slim-bookworm}"
 
 # Verify SSH key setup before proceeding
 verify_ssh_setup() {
@@ -84,6 +97,14 @@ if [[ ${REPO_URL} =~ \.tar\.(gz|xz|bz2)$ || ${REPO_URL} =~ \.tgz$ ]]; then
 	TARBALL_FILE="${BUILD_DIR}/$(basename "${REPO_URL}")"
 	wget -q "${REPO_URL}" -O "${TARBALL_FILE}"
 	echo "Tarball downloaded: ${TARBALL_FILE}"
+	if [[ -n ${SOURCE_SHA256} ]]; then
+		echo "Verifying tarball sha256..."
+		if ! echo "${SOURCE_SHA256}  ${TARBALL_FILE}" | sha256sum -c --quiet -; then
+			echo "Error: Tarball sha256 does not match SOURCE_SHA256 (${SOURCE_SHA256})"
+			exit 1
+		fi
+		echo "Tarball sha256 verified"
+	fi
 	echo "Extracting..."
 	tar xf "${TARBALL_FILE}" -C "${BUILD_DIR}"
 	TOP_DIR=$(tar tf "${TARBALL_FILE}" | head -1) || true
@@ -101,6 +122,14 @@ else
 		exit 1
 	fi
 	echo "Repository cloned to ${PROJECT_DIR}"
+	if [[ -n ${GIT_REF} ]]; then
+		echo "Checking out ${GIT_REF}..."
+		if ! git -C "${PROJECT_DIR}" -c advice.detachedHead=false checkout -q "${GIT_REF}"; then
+			echo "Error: Failed to check out ${GIT_REF}"
+			exit 1
+		fi
+		echo "Checked out $(git -C "${PROJECT_DIR}" rev-parse --short HEAD) (${GIT_REF})"
+	fi
 	if [[ ! -d ${PROJECT_DIR} ]]; then
 		echo "Error: Project directory was not created at ${PROJECT_DIR}"
 		exit 1
@@ -133,17 +162,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if echo "${BUILD_COMMAND}" | grep -q "cargo"; then
 	if echo "${BINARY_NAME}" | grep -q "edit"; then
 		echo "Detected msedit: Switching to glibc-based container for ZimaOS compatibility..."
-		CONTAINER_IMAGE="rust:slim-bookworm"
+		CONTAINER_IMAGE="${RUST_GNU_IMAGE}"
 	else
-		echo "3. Building Rust project in rust:alpine container..."
-		CONTAINER_IMAGE="rust:alpine"
+		echo "3. Building Rust project in ${RUST_ALPINE_IMAGE} container..."
+		CONTAINER_IMAGE="${RUST_ALPINE_IMAGE}"
 	fi
 	BUILD_SCRIPT="${SCRIPT_DIR}/container-build.sh"
 	SCRIPT_NAME="container-build.sh"
 else
-	echo "3. Building in Alpine container..."
+	echo "3. Building in ${ALPINE_IMAGE} container..."
 	BUILD_SCRIPT="${SCRIPT_DIR}/container-build.sh"
-	CONTAINER_IMAGE="alpine:latest"
+	CONTAINER_IMAGE="${ALPINE_IMAGE}"
 	SCRIPT_NAME="container-build.sh"
 fi
 

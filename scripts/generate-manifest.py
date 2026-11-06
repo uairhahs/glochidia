@@ -6,7 +6,10 @@ import hashlib
 import json
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
+
+# Release assets that are not installable tools and so have no manifest entry
+NON_TOOL_FILES = {"manifest.json", "gpm.raw", "SOURCES.txt", "COPYING"}
 
 
 def read_version(tool_name, repo_version="1.0.0"):
@@ -58,7 +61,7 @@ def main():
 
     manifest = {
         "repo_version": repo_version,
-        "updated_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "tools": {},
     }
 
@@ -66,8 +69,10 @@ def main():
         print("Error: release-files directory not found")
         sys.exit(1)
 
-    for tool_name in os.listdir("release-files"):
-        if tool_name.startswith("."):
+    errors = []
+
+    for tool_name in sorted(os.listdir("release-files")):
+        if tool_name.startswith(".") or tool_name in NON_TOOL_FILES:
             continue
 
         filepath = f"release-files/{tool_name}"
@@ -80,7 +85,9 @@ def main():
             size = len(data)
 
         if tool_name not in tools_metadata:
-            print(f"Warning: No metadata for {tool_name}")
+            errors.append(
+                f"{tool_name} was built but has no entry in scripts/tools-metadata.json"
+            )
             continue
 
         metadata = tools_metadata[tool_name]
@@ -104,6 +111,16 @@ def main():
         print(
             f"Added {tool_name}: {size} bytes, SHA256: {sha256[:16]}..., Version: {tool_version}"
         )
+
+    for tool_name in sorted(set(tools_metadata) - set(manifest["tools"])):
+        errors.append(
+            f"{tool_name} is in scripts/tools-metadata.json but no binary was built"
+        )
+
+    if errors:
+        for error in errors:
+            print(f"Error: {error}")
+        sys.exit(1)
 
     with open("release-files/manifest.json", "w") as f:
         json.dump(manifest, f, indent=2)
