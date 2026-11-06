@@ -526,3 +526,25 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # GitHub never changes a release's published date when the release is updated, so the
+      # rolling latest release kept showing the date of its first build. Switching it to
+      # draft and back re-publishes it, which resets the date. Tag and assets are kept, and
+      # downloads kept working throughout when this was tested. Publishing is retried so a
+      # transient API error cannot leave the release hidden as a draft.
+      - name: Refresh latest release publish date
+        if: steps.release-version.outputs.version == 'latest'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release edit latest -R "${GITHUB_REPOSITORY}" --draft=true
+          for attempt in 1 2 3 4 5; do
+            if gh release edit latest -R "${GITHUB_REPOSITORY}" --draft=false --latest; then
+              gh release view latest -R "${GITHUB_REPOSITORY}" --json publishedAt -q '"Published: " + .publishedAt'
+              exit 0
+            fi
+            echo "Publishing failed (attempt ${attempt}), retrying..."
+            sleep $((attempt * 2))
+          done
+          echo "Error: latest release was left as a draft"
+          exit 1
