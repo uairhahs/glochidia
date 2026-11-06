@@ -95,7 +95,7 @@ fn main() {
     ];
 
     // Write to /etc/locale.conf if writable (for persistence)
-    if let Ok(_) = fs::write("/etc/locale.conf", format!("LANG={}\n", locale)) {
+    if fs::write("/etc/locale.conf", format!("LANG={}\n", locale)).is_ok() {
         eprintln!("Updated /etc/locale.conf for system-wide persistence");
     }
 

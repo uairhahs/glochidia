@@ -20,8 +20,10 @@ impl Config {
         let cache_dir = PathBuf::from(cache_dir);
 
         // Create directories if they don't exist
-        fs::create_dir_all(&install_dir)
-            .context(format!("Failed to create install directory: {:?}", install_dir))?;
+        fs::create_dir_all(&install_dir).context(format!(
+            "Failed to create install directory: {:?}",
+            install_dir
+        ))?;
         fs::create_dir_all(&cache_dir)
             .context(format!("Failed to create cache directory: {:?}", cache_dir))?;
 

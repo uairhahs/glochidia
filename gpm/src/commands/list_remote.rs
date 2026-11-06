@@ -8,8 +8,8 @@ pub fn run(config: &Config) -> Result<()> {
 
     println!("Available tools (Manifest v{}):\n", manifest.repo_version);
     println!(
-        "{:<15}\t{:<10}\t{:<15}\t{}",
-        "NAME", "VERSION", "LICENSE", "DESCRIPTION"
+        "{:<15}\t{:<10}\t{:<15}\tDESCRIPTION",
+        "NAME", "VERSION", "LICENSE"
     );
     println!("{}", "-".repeat(80));
 
